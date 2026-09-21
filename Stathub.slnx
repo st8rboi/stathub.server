@@ -3,6 +3,11 @@
     <Project Path="src/Stathub.Infrastructure/Stathub.Infrastructure.csproj" />
     <Project Path="src/Stathub.Shared/Stathub.Shared.csproj" />
     <Project Path="src/Stathub.WebApi/Stathub.WebApi.csproj" />
-    <Folder Name="/src/Modules/" />
+  </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Leagues/">
+    <Project Path="src/Modules/Stathub.Modules.Leagues/Stathub.Modules.Leagues.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Leagues/Stathub.Modules.Leagues.Domain/Stathub.Modules.Leagues.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Leagues/Stathub.Modules.Leagues.Application/Stathub.Modules.Leagues.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Leagues/Stathub.Modules.Leagues.Infrastructure/Stathub.Modules.Leagues.Infrastructure.csproj" />
   </Folder>
 </Solution>

@@ -1,6 +1,82 @@
 @Stathub.WebApi_HostAddress = http://localhost:5248
+@organizerId = 11111111-1111-1111-1111-111111111111
+@slug = moscow-amateur-league
 
-GET {{Stathub.WebApi_HostAddress}}/weatherforecast/
-Accept: application/json
+### 1. Создать лигу (Draft)
+# @name createLeague
+POST {{Stathub.WebApi_HostAddress}}/leagues
+Content-Type: application/json
+
+{
+  "organizerId": "{{organizerId}}",
+  "name": "Московская любительская лига",
+  "slug": "{{slug}}",
+  "sport": "Football",
+  "city": "Москва",
+  "region": "Московская область",
+  "dataSource": "Native"
+}
+
+### 2. Лига по id
+@leagueId = {{createLeague.response.body.$.id}}
+GET {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}
+
+### 3. Лига по slug
+GET {{Stathub.WebApi_HostAddress}}/leagues/by-slug/{{slug}}
+
+### 4. Публичный список (только Published)
+GET {{Stathub.WebApi_HostAddress}}/leagues
+
+### 5. Список лиг организатора (все статусы)
+GET {{Stathub.WebApi_HostAddress}}/leagues?organizerId={{organizerId}}
+
+### 6. Опубликовать лигу
+POST {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/publish
+
+### 7. Создать турнир
+# @name createTournament
+POST {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/tournaments
+Content-Type: application/json
+
+{
+  "name": "Чемпионат 2026",
+  "startDate": "2026-10-01",
+  "endDate": "2027-05-31"
+}
+
+### 8. Добавить этап (только пока турнир Scheduled)
+@tournamentId = {{createTournament.response.body.$.id}}
+POST {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/tournaments/{{tournamentId}}/stages
+Content-Type: application/json
+
+{
+  "name": "Регулярный чемпионат",
+  "formatType": "Round",
+  "winPoints": 3,
+  "drawPoints": 1,
+  "lossPoints": 0,
+  "periodDurationMinutes": 45,
+  "periodsCount": 2,
+  "extraTimeEnabled": false,
+  "penaltyShootoutEnabled": false
+}
+
+### 9. Список турниров лиги
+GET {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/tournaments
+
+### 10. Турнир с этапами
+GET {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/tournaments/{{tournamentId}}
+
+### 11. Старт турнира
+POST {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/tournaments/{{tournamentId}}/start
+
+### 12. Завершение турнира
+POST {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/tournaments/{{tournamentId}}/complete
+
+### 13. Отмена турнира
+POST {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/tournaments/{{tournamentId}}/cancel
+
+### 14. Архивировать лигу
+POST {{Stathub.WebApi_HostAddress}}/leagues/{{leagueId}}/archive
 
 ###

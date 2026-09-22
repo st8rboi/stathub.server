@@ -10,7 +10,7 @@ namespace Stathub.Modules.Leagues.Infrastructure.Persistence;
 internal sealed class LeagueRepository(LeaguesDbContext dbContext) : ILeagueRepository
 {
     public Task<League?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        dbContext.Leagues.FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+        dbContext.Leagues.FirstOrDefaultAsync(l => l.Id == id, cancellationToken); 
 
     public Task<League?> GetBySlugAsync(string slug, CancellationToken cancellationToken = default) =>
         dbContext.Leagues.FirstOrDefaultAsync(l => l.Slug == slug, cancellationToken);
@@ -42,8 +42,8 @@ internal sealed class LeagueRepository(LeaguesDbContext dbContext) : ILeagueRepo
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            // Гонка между проверкой slug в сервисе и вставкой: единственный уникальный индекс лиги — по slug
-            throw new ConflictException("League with the same slug already exists.");
+            // Гонка между проверкой slug в сервисе и вставкой: единственный уникальный индекс лиги — slug
+            throw new ConflictException("Лига с таким slug уже существует.");
         }
     }
 }

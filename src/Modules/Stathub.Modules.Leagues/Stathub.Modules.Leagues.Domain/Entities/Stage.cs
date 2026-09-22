@@ -5,6 +5,9 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Leagues.Domain.Entities;
 
+/// <summary>
+/// Представляет этап турнира, содержащий информацию о его формате, правилах подсчета очков и формате матчей.
+/// </summary>
 public sealed class Stage : Entity
 {
     private readonly List<StageTiebreakerRule> _tiebreakerRules = [];
@@ -49,7 +52,7 @@ public sealed class Stage : Entity
         MatchFormatRule matchFormatRule)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new DomainException("Stage name is required.");
+            throw new DomainException("Stage name обязательное поле.");
 
         if (!Enum.IsDefined(formatType))
             throw new DomainException($"Неизвестный формат этапа '{formatType}'.");
@@ -63,7 +66,7 @@ public sealed class Stage : Entity
     public StageTiebreakerRule AddTiebreakerRule(int priority, TiebreakerCriterion criterion)
     {
         if (_tiebreakerRules.Any(r => r.Priority == priority))
-            throw new ConflictException($"A tiebreaker rule with priority {priority} already exists for this stage.");
+            throw new ConflictException($"Критерий приоритета {priority} уже существует для этого этапа.");
 
         var rule = StageTiebreakerRule.Create(Id, priority, criterion);
         _tiebreakerRules.Add(rule);

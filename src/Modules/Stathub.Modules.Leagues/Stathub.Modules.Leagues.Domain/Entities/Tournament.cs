@@ -5,6 +5,9 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Leagues.Domain.Entities;
 
+/// <summary>
+/// Представляет турнир в рамках лиги, содержащий информацию о его статусе, датах проведения и этапах.
+/// </summary>
 public sealed class Tournament : AggregateRoot
 {
     private readonly List<Stage> _stages = [];
@@ -33,16 +36,25 @@ public sealed class Tournament : AggregateRoot
         CreatedAtUtc = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Создает новый турнир в рамках лиги с указанными параметрами.
+    /// </summary>
+    /// <param name="leagueId"></param>
+    /// <param name="name"></param>
+    /// <param name="startDate"></param>
+    /// <param name="endDate"></param>
+    /// <returns></returns>
+    /// <exception cref="DomainException"></exception>
     public static Tournament Create(Guid leagueId, string name, DateOnly startDate, DateOnly? endDate = null)
     {
         if (leagueId == Guid.Empty)
-            throw new DomainException("League id is required.");
+            throw new DomainException("League id обязательное поле.");
 
         if (string.IsNullOrWhiteSpace(name))
-            throw new DomainException("Tournament name is required.");
+            throw new DomainException("Tournament name обязательное поле.");
 
         if (endDate is not null && endDate < startDate)
-            throw new DomainException("Tournament end date cannot be before its start date.");
+            throw new DomainException("Tournament end date не может быть раньше его даты начала.");
 
         return new Tournament(Guid.NewGuid(), leagueId, name.Trim(), startDate, endDate);
     }
@@ -50,7 +62,7 @@ public sealed class Tournament : AggregateRoot
     public void Start()
     {
         if (Status != TournamentStatus.Scheduled)
-            throw new ConflictException($"Only a {TournamentStatus.Scheduled} tournament can be started.");
+            throw new ConflictException($"Только турнир со статусом {TournamentStatus.Scheduled} может быть запущен.");
 
         Status = TournamentStatus.Active;
     }
@@ -58,7 +70,7 @@ public sealed class Tournament : AggregateRoot
     public void Complete()
     {
         if (Status != TournamentStatus.Active)
-            throw new ConflictException($"Only an {TournamentStatus.Active} tournament can be completed.");
+            throw new ConflictException($"Только турнир со статусом {TournamentStatus.Active} может быть завершен.");
 
         Status = TournamentStatus.Completed;
     }
@@ -66,7 +78,7 @@ public sealed class Tournament : AggregateRoot
     public void Cancel()
     {
         if (Status == TournamentStatus.Completed)
-            throw new ConflictException("A completed tournament cannot be cancelled.");
+            throw new ConflictException($"Турнир со статусом {TournamentStatus.Completed} не может быть отменен.");
 
         Status = TournamentStatus.Cancelled;
     }
@@ -74,7 +86,7 @@ public sealed class Tournament : AggregateRoot
     public Stage AddStage(string name, StageFormatType formatType, PointsRule pointsRule, MatchFormatRule matchFormatRule)
     {
         if (Status != TournamentStatus.Scheduled)
-            throw new ConflictException($"Stages can only be added to a {TournamentStatus.Scheduled} tournament.");
+            throw new ConflictException($"Стадия может быть добавлена только к турниру со статусом {TournamentStatus.Scheduled}.");
 
         var order = _stages.Count + 1;
         var stage = Stage.Create(Id, order, name, formatType, pointsRule, matchFormatRule);

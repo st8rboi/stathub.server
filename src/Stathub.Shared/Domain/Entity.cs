@@ -1,5 +1,8 @@
 namespace Stathub.Shared.Domain;
 
+/// <summary>
+/// Базовый класс для сущностей, обеспечивающий идентификацию.
+/// </summary>
 public abstract class Entity
 {
     public Guid Id { get; protected init; }

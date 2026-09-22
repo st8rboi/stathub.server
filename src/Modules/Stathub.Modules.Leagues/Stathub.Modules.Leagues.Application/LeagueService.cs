@@ -22,7 +22,7 @@ public sealed class LeagueService(ILeagueRepository repository)
         var league = League.Create(organizerId, name, slug, sport, city, region, dataSource);
 
         if (await repository.GetBySlugAsync(league.Slug, cancellationToken) is not null)
-            throw new ConflictException($"League with slug '{league.Slug}' already exists.");
+            throw new ConflictException($"Лига со slug '{league.Slug}' уже существует.");
 
         await repository.AddAsync(league, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -36,7 +36,7 @@ public sealed class LeagueService(ILeagueRepository repository)
     public async Task<LeagueDto> GetBySlugAsync(string slug, CancellationToken cancellationToken = default)
     {
         var league = await repository.GetBySlugAsync(slug.Trim().ToLowerInvariant(), cancellationToken)
-            ?? throw new NotFoundException($"League with slug '{slug}' was not found.");
+            ?? throw new NotFoundException($"Лига со slug '{slug}' не найдена.");
 
         return LeagueDto.From(league);
     }
@@ -70,5 +70,5 @@ public sealed class LeagueService(ILeagueRepository repository)
 
     private async Task<League> GetOrThrowAsync(Guid id, CancellationToken cancellationToken) =>
         await repository.GetByIdAsync(id, cancellationToken)
-        ?? throw new NotFoundException($"League '{id}' was not found.");
+        ?? throw new NotFoundException($"Лига '{id}' не найдена.");
 }

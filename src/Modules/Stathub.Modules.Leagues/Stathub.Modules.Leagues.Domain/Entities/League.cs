@@ -80,11 +80,11 @@ public sealed class League : AggregateRoot
     public void Publish()
     {
         if (Status != LeagueStatus.Draft)
-            throw new ConflictException($"Only a league in {LeagueStatus.Draft} status can be published.");
+            throw new ConflictException($"Только лига в статусе {LeagueStatus.Draft} может быть опубликована.");
 
         // Без города лига не попадёт в поиск "лиги рядом со мной"
         if (City is null)
-            throw new DomainException("League city is required to publish a league.");
+            throw new DomainException("Город обязателен для публикации лиги.");
 
         Status = LeagueStatus.Published;
     }
@@ -92,7 +92,7 @@ public sealed class League : AggregateRoot
     public void Archive()
     {
         if (Status == LeagueStatus.Archived)
-            throw new ConflictException("League is already archived.");
+            throw new ConflictException("Лига уже архивирована.");
 
         Status = LeagueStatus.Archived;
     }
@@ -100,7 +100,7 @@ public sealed class League : AggregateRoot
     public void EnsureCanAddTournament()
     {
         if (Status == LeagueStatus.Archived)
-            throw new ConflictException("Cannot add a tournament to an archived league.");
+            throw new ConflictException("Нельзя добавить турнир в архивированную лигу.");
     }
 
     private static string? NormalizeOptional(string? value) =>

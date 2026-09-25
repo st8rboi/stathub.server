@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Stathub.Modules.Leagues.Application.Abstractions;
+using Stathub.Modules.Leagues.Application.Interfaces;
 using Stathub.Modules.Leagues.Domain.Entities;
 
 namespace Stathub.Modules.Leagues.Infrastructure.Persistence;

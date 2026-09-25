@@ -7,9 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Stathub.Modules.Matches.Domain/**/*.cs" />
-    <Compile Remove="Stathub.Modules.Matches.Application/**/*.cs" />
-    <Compile Remove="Stathub.Modules.Matches.Infrastructure/**/*.cs" />
+    <ProjectReference Include="..\..\..\Stathub.Shared\Stathub.Shared.csproj" />
   </ItemGroup>
-  
+
 </Project>

@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Stathub.Modules.Leagues.Application;
-using Stathub.Modules.Leagues.Application.Abstractions;
+using Stathub.Modules.Leagues.Application.Interfaces;
 using Stathub.Modules.Leagues.Infrastructure.Persistence;
 
 namespace Stathub.Modules.Leagues.Infrastructure;

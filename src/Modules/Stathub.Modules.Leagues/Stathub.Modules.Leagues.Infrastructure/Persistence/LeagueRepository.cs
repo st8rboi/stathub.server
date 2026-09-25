@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Stathub.Modules.Leagues.Application.Abstractions;
+using Stathub.Modules.Leagues.Application.Interfaces;
 using Stathub.Modules.Leagues.Domain.Entities;
 using Stathub.Modules.Leagues.Domain.Enums;
 using Stathub.Shared.Exceptions;

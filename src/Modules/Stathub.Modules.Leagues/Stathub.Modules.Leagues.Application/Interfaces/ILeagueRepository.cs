@@ -1,7 +1,7 @@
 using Stathub.Modules.Leagues.Domain.Entities;
 using Stathub.Modules.Leagues.Domain.Enums;
 
-namespace Stathub.Modules.Leagues.Application.Abstractions;
+namespace Stathub.Modules.Leagues.Application.Interfaces;
 
 public interface ILeagueRepository
 {

@@ -6,13 +6,19 @@ namespace Stathub.Modules.Matches.Domain.Entities;
 
 public sealed class Match : AggregateRoot
 {
-    public Guid TournamentId { get; private set; }
-    public Guid HomeTeamId { get; private set; }
-    public Guid AwayTeamId { get; private set; }
-    public DateTime StartTimeUtc { get; private set; }
-    public MatchStatus Status { get; private set; }
-    public int? HomeScore { get; private set; }
-    public int? AwayScore { get; private set; }
+
+    public Guid StageId { get; private set; } // Стадия (этап) турнира
+    public Guid HomeTeamId { get; private set; } // Первая команда
+    public Guid AwayTeamId { get; private set; } // Вторая команда
+
+    public DateTime CreatedAtUtc { get; private set; } // Создан в
+    public DateTime ScheduledTimeUtc { get; private set; } // Запланирова на
+    public DateTime? StartedAtUtc { get; private set; } // Реально начался в
+
+    public MatchStatus Status { get; private set; } // Завершен, Запланирован, В процессе, Отменен
+
+    public int HomeScore { get; private set; } // Счет первой команды
+    public int AwayScore { get; private set; } // Счет второй команды
 
     private Match()
     {
@@ -20,42 +26,45 @@ public sealed class Match : AggregateRoot
 
     private Match(
         Guid id,
-        Guid tournamentId,
+        Guid stageId,
         Guid homeTeamId,
         Guid awayTeamId,
-        DateTime startTimeUtc)
+        DateTime scheduledTimeUtc)
     {
         Id = id;
-        TournamentId = tournamentId;
+        StageId = stageId;
         HomeTeamId = homeTeamId;
         AwayTeamId = awayTeamId;
-        StartTimeUtc = startTimeUtc;
+        ScheduledTimeUtc = scheduledTimeUtc;
+        CreatedAtUtc = DateTime.UtcNow;
+
         Status = MatchStatus.Scheduled;
+        HomeScore = 0;
+        AwayScore = 0;
     }
 
     public static Match Create(
-        Guid tournamentId,
+        Guid stageId,
         Guid homeTeamId,
         Guid awayTeamId,
-        DateTime startTimeUtc)
+        DateTime scheduledTimeUtc)
     {
-        if (tournamentId == Guid.Empty)
-            throw new DomainException("Tournament id обязательное поле.");
-
-        if (homeTeamId == Guid.Empty)
-            throw new DomainException("Home team id обязательное поле.");
-
-        if (awayTeamId == Guid.Empty)
-            throw new DomainException("Away team id обязательное поле.");
-
-        if (startTimeUtc == default)
-            throw new DomainException("Start time обязательное поле.");
+        if (stageId == Guid.Empty) 
+            throw new DomainException("DtageId обязательное поле."); 
+        if (homeTeamId == Guid.Empty) 
+            throw new DomainException("HomeTeamId обязательное поле."); 
+        if (awayTeamId == Guid.Empty) 
+            throw new DomainException("AwayTeamId обязательное поле."); 
+        if (scheduledTimeUtc == default) 
+            throw new DomainException("ScheduledTimeUtc обязательное поле.");
 
         return new Match(
-            id: Guid.NewGuid(),
-            tournamentId: tournamentId,
-            homeTeamId: homeTeamId,
-            awayTeamId: awayTeamId,
-            startTimeUtc: startTimeUtc);
+            Guid.NewGuid(),
+            stageId,
+            homeTeamId,
+            awayTeamId,
+            scheduledTimeUtc);
     }
+
+    // public void Start, Stop, Resume, Finish
 }

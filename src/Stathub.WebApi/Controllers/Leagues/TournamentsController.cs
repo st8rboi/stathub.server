@@ -3,7 +3,7 @@ using Stathub.Modules.Leagues.Application;
 using Stathub.Modules.Leagues.Application.Dtos;
 using Stathub.WebApi.Contracts.Leagues;
 
-namespace Stathub.WebApi.Controllers;
+namespace Stathub.WebApi.Controllers.Leagues;
 
 [ApiController]
 [Route("leagues/{leagueId:guid}/tournaments")]

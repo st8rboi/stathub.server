@@ -11,10 +11,10 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
         return await dbContext.Matches.FindAsync(new object[] { id }, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Match>> ListByTournamentIdAsync(Guid tournamentId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Match>> GetByStageId(Guid stageId, CancellationToken cancellationToken = default)
     {
         return await dbContext.Matches
-            .Where(m => m.TournamentId == tournamentId)
+            .Where(m => m.StageId == stageId)
             .ToListAsync(cancellationToken);
     }
 

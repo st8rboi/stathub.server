@@ -1,7 +1,11 @@
-namespace Stathub.Modules.Leagues.Application;
+using Stathub.Modules.Leagues.Application.Interfaces;
+using Stathub.Modules.Leagues.Application.Dtos;
+
+namespace Stathub.Modules.Leagues.Infrastructure.Services;
 
 public sealed class StageReader(IStageRepository repository) : IStageReader
 {
+    // Получить правила матча
     public async Task<StageMatchRulesDto?> GetMatchRulesAsync(
         Guid stageId,
         CancellationToken cancellationToken = default)

@@ -7,7 +7,7 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Matches.Application;
 
-public sealed class MatchService(IMatchRepository repository)
+public sealed class MatchService(IMatchRepository repository, IMatchFormatProvider matchFormatProvider)
 {
     #region Базовые методы
     public async Task<Guid> CreateMatchAsync(
@@ -31,14 +31,14 @@ public sealed class MatchService(IMatchRepository repository)
     #endregion 
 
     #region Управление матчем
-    public async Task StartMatchAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task StartMatchAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var match = await GetOrThrowAsync(id, cancellationToken);
-        var format = await matchFormatProvider.GetByStageIdAsync(
-            match.StageId,
-            cancellationToken);
+        var matchFormat = await GetMatchFormatAsync(match, cancellationToken);
 
-        match.Start(format);
+        match.Start(matchFormat);
 
         await repository.SaveChangesAsync(cancellationToken);
     }
@@ -48,37 +48,35 @@ public sealed class MatchService(IMatchRepository repository)
         CancellationToken cancellationToken = default)
     {
         var match = await GetOrThrowAsync(id, cancellationToken);
-        var format = await matchFormatProvider.GetByStageIdAsync(
-            match.StageId,
-            cancellationToken);
+        var matchFormat = await GetMatchFormatAsync(match, cancellationToken);
 
-        match.Stop(format);
+        match.Stop(matchFormat);
 
         await repository.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task ResumeMatchAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task ResumeMatchAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var match = await GetOrThrowAsync(id, cancellationToken);
-        var format = await matchFormatProvider.GetByStageIdAsync(
-            match.StageId,
-            cancellationToken);
+        var matchFormat = await GetMatchFormatAsync(match, cancellationToken);
 
-        match.Resume(format);
+        match.Resume(matchFormat);
 
-        await repository.SaveChangesAsync(cancellationToken);    
+        await repository.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task FinishMatchAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task FinishMatchAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var match = await GetOrThrowAsync(id, cancellationToken);
-        var format = await matchFormatProvider.GetByStageIdAsync(
-            match.StageId,
-            cancellationToken);
+        var matchFormat = await GetMatchFormatAsync(match, cancellationToken);
 
-        match.Finish(format);
+        match.Finish(matchFormat);
 
-        await repository.SaveChangesAsync(cancellationToken);    
+        await repository.SaveChangesAsync(cancellationToken);
     }
     #endregion  
 
@@ -87,6 +85,17 @@ public sealed class MatchService(IMatchRepository repository)
     private async Task<Match> GetOrThrowAsync(Guid id, CancellationToken cancellationToken) =>
         await repository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException($"Матч '{id}' не найден.");
+    private async Task<MatchFormat> GetMatchFormatAsync(Match match, CancellationToken cancellationToken)
+    {
+        var stageFormat = await matchFormatProvider.GetByStageIdAsync(
+            match.StageId,
+            cancellationToken);
 
+        return MatchFormat.Create(
+            stageFormat.PeriodsCount,
+            stageFormat.PeriodDurationMinutes,
+            stageFormat.ExtraTimeEnabled,
+            stageFormat.PenaltyShootoutEnabled);
+    }
     #endregion
 }

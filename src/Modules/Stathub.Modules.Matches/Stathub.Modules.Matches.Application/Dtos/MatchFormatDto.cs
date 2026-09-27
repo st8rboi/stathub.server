@@ -1,4 +1,4 @@
-namespace Stathub.Modules.Matches.Dtos;
+namespace Stathub.Modules.Matches.Application.Dtos;
 
 public sealed record MatchFormatDto(
     int PeriodsCount,

@@ -6,7 +6,7 @@ namespace Stathub.Modules.Matches.Domain.Entities;
 
 public sealed class Match : AggregateRoot
 {
-
+    // Добавить в enum Status таймы или добавить отдельный enum Period для таймов?
     public Guid StageId { get; private set; } // Стадия (этап) турнира
     public Guid HomeTeamId { get; private set; } // Первая команда
     public Guid AwayTeamId { get; private set; } // Вторая команда
@@ -67,4 +67,44 @@ public sealed class Match : AggregateRoot
     }
 
     // public void Start, Stop, Resume, Finish
+    public void Start(MatchFormat format)
+    {
+        if (Status != MatchStatus.Scheduled)
+            throw new DomainException(
+                "Матч можно начать только из запланированного состояния.");
+
+        Status = MatchStatus.InProgress;
+        // CurrentPeriod = 1; Стоит ли добавлять таймы?
+        StartedAtUtc = DateTime.UtcNow;
+    }
+
+    public void Stop(MatchFormat format)
+    {
+        if (Status != MatchStatus.InProgress)
+            throw new DomainException(
+                "Матч можно остановить только из состояния в процессе.");
+
+        Status = MatchStatus.Pause;
+        // CurrentPeriod = 1; Стоит ли добавлять таймы?
+    }
+
+    public void Resume(MatchFormat format)
+    {
+        if (Status != MatchStatus.Pause)
+            throw new DomainException(
+                "Матч можно возобновить только из состояния перерыва.");
+
+        Status = MatchStatus.InProgress;
+        // CurrentPeriod = 2; Стоит ли добавлять таймы?
+    }
+
+    public void Finish(MatchFormat format)
+    {
+        if (Status != MatchStatus.InProgress)
+            throw new DomainException(
+                "Матч можно закончить только из состояния в процесса.");
+
+        Status = MatchStatus.Finished;
+        // CurrentPeriod = 2; Стоит ли добавлять таймы?
+    }
 }

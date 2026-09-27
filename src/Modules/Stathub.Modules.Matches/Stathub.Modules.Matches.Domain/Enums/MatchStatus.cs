@@ -4,6 +4,7 @@ public enum MatchStatus
 {
     Scheduled = 0, // Запланирован
     InProgress = 1, // В процессе
-    Finished = 2, // Завершён
-    Cancelled = 3 // Отменён
+    Pause = 2, // Перерыв
+    Finished = 3, // Завершён
+    Cancelled = 4 // Отменён
 }

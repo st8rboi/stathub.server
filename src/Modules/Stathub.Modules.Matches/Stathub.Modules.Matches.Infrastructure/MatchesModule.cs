@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Infrastructure.Persistence;
+using Stathub.Modules.Matches.Infrastructure.Services;
 
 namespace Stathub.Modules.Matches.Infrastructure;
 
@@ -15,6 +16,7 @@ public static class MatchesModule
 
         services.AddDbContext<MatchesDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IMatchRepository, MatchRepository>();
+        services.AddScoped<IMatchFormatProvider, MatchFormatProvider>();
 
         return services;
     }

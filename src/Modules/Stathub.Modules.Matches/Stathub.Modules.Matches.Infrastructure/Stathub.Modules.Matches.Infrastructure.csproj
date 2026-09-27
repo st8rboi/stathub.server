@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Stathub.Modules.Matches.Domain\Stathub.Modules.Matches.Domain.csproj" />
     <ProjectReference Include="..\Stathub.Modules.Matches.Application\Stathub.Modules.Matches.Application.csproj" />
+    <ProjectReference Include="..\..\Stathub.Modules.Leagues\Stathub.Modules.Leagues.Application\Stathub.Modules.Leagues.Application.csproj" />
   </ItemGroup>
 
 </Project>

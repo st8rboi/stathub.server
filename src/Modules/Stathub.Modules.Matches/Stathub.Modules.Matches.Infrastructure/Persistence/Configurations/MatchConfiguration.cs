@@ -13,10 +13,10 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.HasKey(m => m.Id);
         builder.Property(m => m.Id).ValueGeneratedNever();
 
-        builder.Property(m => m.TournamentId).IsRequired();
+        builder.Property(m => m.StageId).IsRequired();
         builder.Property(m => m.HomeTeamId).IsRequired();
         builder.Property(m => m.AwayTeamId).IsRequired();
-        builder.Property(m => m.StartTimeUtc).IsRequired();
+        builder.Property(m => m.StartedAtUtc).IsRequired();
         builder.Property(m => m.Status).IsRequired();
 
     }

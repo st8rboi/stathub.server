@@ -1,3 +1,5 @@
+using Stathub.Modules.Leagues.Application.Dtos;
+
 namespace Stathub.Modules.Leagues.Application.Interfaces;
 
 public interface IStageReader

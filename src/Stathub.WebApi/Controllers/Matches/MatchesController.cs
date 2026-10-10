@@ -1,61 +1,67 @@
-// using Microsoft.AspNetCore.Mvc;
-// using Stathub.Modules.Matches.Application;
-// using Stathub.Modules.Matches.Application.Dtos;
-// using Stathub.WebApi.Contracts.Matches;
-// namespace Stathub.Modules.Leagues.Application.Dtos;
+using Microsoft.AspNetCore.Mvc;
+using Stathub.Modules.Matches.Application;
+using Stathub.Modules.Matches.Application.Dtos;
+using Stathub.WebApi.Contracts.Matches;
 
-// namespace Stathub.WebApi.Controllers.Matches;
+namespace Stathub.WebApi.Controllers.Matches;
 
-// [ApiController]
-// [Route("matches")]
-// public sealed class MatchesController(MatchService matchService) : ControllerBase
-// {
-//     [HttpPost]
-//     public async Task<IActionResult> CreateMatch(CreateMatchRequest request, CancellationToken cancellationToken)
-//     {
-//         var matchId = await matchService.CreateMatchAsync(
-//             request.TournamentId,
-//             request.StageId,
-//             request.HomeTeamId,
-//             request.AwayTeamId,
-//             request.StartDate,
-//             request.FormatType,
-//             request.WinPoints,
-//             request.DrawPoints,
-//             request.LossPoints,
-//             request.PeriodDurationMinutes,
-//             request.PeriodsCount,
-//             cancellationToken);
+[ApiController]
+[Route("matches")]
+public sealed class MatchesController(MatchService matchService) : ControllerBase
+{
+    [HttpPost]
+    public async Task<IActionResult> CreateMatch(CreateMatchRequest request, CancellationToken cancellationToken)
+    {
+        var match = await matchService.CreateMatchAsync(
+            request.StageId,
+            request.HomeTeamId,
+            request.AwayTeamId,
+            request.StartTimeUtc,
+            cancellationToken);
+        
+        return CreatedAtAction(
+            nameof(GetMatchById),
+            new { id = match },
+            new { Id = match });
+    }
 
-//         return CreatedAtAction(nameof(GetMatch), new { id = matchId }, new { id = matchId });
-//     }
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<MatchDto>> GetMatchById(Guid id, CancellationToken cancellationToken) =>
+        Ok(await matchService.GetByIdAsync(id, cancellationToken));
 
-//     // Без organizerId — публичный список опубликованных лиг, с organizerId — все лиги организатора
-//     [HttpGet]
-//     public async Task<ActionResult<IReadOnlyList<LeagueDto>>> ListMatches(
-//         [FromQuery] Guid? organizerId,
-//         CancellationToken cancellationToken) =>
-//         Ok(await matchService.ListAsync(organizerId, cancellationToken));
+    [HttpPost("{id:guid}/start")]
+    public async Task<IActionResult> StartMatch(Guid id, CancellationToken cancellationToken)
+    {
+        await matchService.StartMatchAsync(id, cancellationToken);
+        return NoContent();
+    }
 
-//     [HttpGet("{id:guid}")]
-//     public async Task<ActionResult<LeagueDto>> GetLeague(Guid id, CancellationToken cancellationToken) =>
-//         Ok(await matchService.GetByIdAsync(id, cancellationToken));
+    [HttpPost("{id:guid}/stop")]
+    public async Task<IActionResult> StopMatch(Guid id, CancellationToken cancellationToken)
+    {
+        await matchService.StopMatchAsync(id, cancellationToken);
+        return NoContent();
+    }
 
-//     [HttpGet("by-slug/{slug}")]
-//     public async Task<ActionResult<LeagueDto>> GetLeagueBySlug(string slug, CancellationToken cancellationToken) =>
-//         Ok(await matchService.GetBySlugAsync(slug, cancellationToken));
+    [HttpPost("{id:guid}/resume")]
+    public async Task<IActionResult> ResumeMatch(Guid id, CancellationToken cancellationToken)
+    {
+        await matchService.ResumeMatchAsync(id, cancellationToken);
+        return NoContent();
+    }
 
-//     [HttpPost("{id:guid}/publish")]
-//     public async Task<IActionResult> PublishLeague(Guid id, CancellationToken cancellationToken)
-//     {
-//         await matchService.PublishAsync(id, cancellationToken);
-//         return NoContent();
-//     }
+    // Отдельное действие судьи, а не следствие resume: пауза бывает и внутри периода
+    [HttpPost("{id:guid}/next-period")]
+    public async Task<IActionResult> StartNextPeriod(Guid id, CancellationToken cancellationToken)
+    {
+        await matchService.StartNextPeriodAsync(id, cancellationToken);
+        return NoContent();
+    }
 
-//     [HttpPost("{id:guid}/archive")]
-//     public async Task<IActionResult> ArchiveLeague(Guid id, CancellationToken cancellationToken)
-//     {
-//         await matchService.ArchiveAsync(id, cancellationToken);
-//         return NoContent();
-//     }
-// }
+    [HttpPost("{id:guid}/finish")]
+    public async Task<IActionResult> FinishMatch(Guid id, CancellationToken cancellationToken)
+    {
+        await matchService.FinishMatchAsync(id, cancellationToken);
+        return NoContent();
+    }
+}

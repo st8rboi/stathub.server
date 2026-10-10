@@ -37,11 +37,29 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("CurrentPeriod")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("ExtraTimeEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("HomeScore")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("HomeTeamId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("PenaltyShootoutEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("PeriodDurationMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PeriodStartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PeriodsCount")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("ScheduledTimeUtc")
                         .HasColumnType("timestamp with time zone");
@@ -49,13 +67,15 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<Guid>("StageId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("StartedAtUtc")
+                    b.Property<DateTime?>("StartedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("StageId");
 
                     b.ToTable("matches", "matches");
                 });

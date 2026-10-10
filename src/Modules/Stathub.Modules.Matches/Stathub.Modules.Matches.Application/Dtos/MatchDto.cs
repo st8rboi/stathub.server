@@ -1,6 +1,5 @@
 using Stathub.Modules.Matches.Domain.Entities;
 using Stathub.Modules.Matches.Domain.Enums;
-using Stathub.Shared.Domain;
 
 namespace Stathub.Modules.Matches.Application.Dtos;
 
@@ -14,7 +13,15 @@ public sealed record MatchDto(
     DateTime? StartedAtUtc,
     MatchStatus Status,
     int HomeScore,
-    int AwayScore
+    int AwayScore,
+    // Снимок регламента матча: заполняется при создании из правил этапа
+    int PeriodsCount,
+    int PeriodDurationMinutes,
+    bool ExtraTimeEnabled,
+    bool PenaltyShootoutEnabled,
+    // Текущий период: 0 — матч ещё не начат
+    int CurrentPeriod,
+    DateTime? PeriodStartedAtUtc
     )
 {
     internal static MatchDto From(Match match) => new(
@@ -27,6 +34,12 @@ public sealed record MatchDto(
         match.StartedAtUtc,
         match.Status,
         match.HomeScore,
-        match.AwayScore
+        match.AwayScore,
+        match.PeriodsCount,
+        match.PeriodDurationMinutes,
+        match.ExtraTimeEnabled,
+        match.PenaltyShootoutEnabled,
+        match.CurrentPeriod,
+        match.PeriodStartedAtUtc
     );
 }

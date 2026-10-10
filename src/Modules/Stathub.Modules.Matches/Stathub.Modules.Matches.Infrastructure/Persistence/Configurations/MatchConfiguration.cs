@@ -16,8 +16,24 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.StageId).IsRequired();
         builder.Property(m => m.HomeTeamId).IsRequired();
         builder.Property(m => m.AwayTeamId).IsRequired();
-        builder.Property(m => m.StartedAtUtc).IsRequired();
+        builder.Property(m => m.CreatedAtUtc).IsRequired();
+        builder.Property(m => m.ScheduledTimeUtc).IsRequired();
+        // StartedAtUtc заполняется только при старте матча, поэтому в Scheduled он NULL
+        builder.Property(m => m.StartedAtUtc);
         builder.Property(m => m.Status).IsRequired();
+        builder.Property(m => m.HomeScore).IsRequired();
+        builder.Property(m => m.AwayScore).IsRequired();
 
+        // Снимок правил этапа на момент создания матча — обязателен
+        builder.Property(m => m.PeriodsCount).IsRequired();
+        builder.Property(m => m.PeriodDurationMinutes).IsRequired();
+        builder.Property(m => m.ExtraTimeEnabled).IsRequired();
+        builder.Property(m => m.PenaltyShootoutEnabled).IsRequired();
+
+        // Заполняются только когда матч начат, до старта CurrentPeriod = 0
+        builder.Property(m => m.CurrentPeriod).IsRequired();
+        builder.Property(m => m.PeriodStartedAtUtc);
+
+        builder.HasIndex(m => m.StageId);
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Stathub.Modules.Matches.Application;
 using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Infrastructure.Persistence;
 using Stathub.Modules.Matches.Infrastructure.Services;
@@ -18,6 +19,7 @@ public static class MatchesModule
         services.AddDbContext<MatchesDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IMatchRepository, MatchRepository>();
         services.AddScoped<IMatchFormatProvider, MatchFormatProvider>();
+        services.AddScoped<MatchService>();
         return services;
     }
 }

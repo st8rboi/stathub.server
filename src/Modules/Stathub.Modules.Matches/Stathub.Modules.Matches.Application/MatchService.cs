@@ -113,10 +113,10 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
         var stageFormat = await matchFormatProvider.GetByStageIdAsync(stageId, cancellationToken);
 
         return MatchFormat.Create(
-            stageFormat.PeriodsCount,
-            stageFormat.PeriodDurationMinutes,
-            stageFormat.ExtraTimeEnabled,
-            stageFormat.PenaltyShootoutEnabled);
+            periodsCount: stageFormat.PeriodsCount,
+            periodDurationMinutes: stageFormat.PeriodDurationMinutes,
+            extraTimeEnabled: stageFormat.ExtraTimeEnabled,
+            penaltyShootoutEnabled: stageFormat.PenaltyShootoutEnabled);
     }
     #endregion
 }

@@ -21,9 +21,9 @@ public sealed class MatchFormatProvider(
                 $"Правила матча для стадии '{stageId}' не найдены.");
 
         return new MatchFormatDto(
-            rules.PeriodDurationMinutes,
-            rules.PeriodsCount,
-            rules.ExtraTimeEnabled,
-            rules.PenaltyShootoutEnabled);
+            PeriodsCount: rules.PeriodsCount,
+            PeriodDurationMinutes: rules.PeriodDurationMinutes,
+            ExtraTimeEnabled: rules.ExtraTimeEnabled,
+            PenaltyShootoutEnabled: rules.PenaltyShootoutEnabled);
     }
 }

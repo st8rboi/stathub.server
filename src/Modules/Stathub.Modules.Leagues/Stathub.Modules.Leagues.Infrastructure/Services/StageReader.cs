@@ -18,11 +18,11 @@ public sealed class StageReader(IStageRepository repository) : IStageReader
             return null;
 
         var rule = stage.MatchFormatRule;
-
+        
         return new StageMatchRulesDto(
-            rule.PeriodDurationMinutes,
-            rule.PeriodsCount,
-            rule.ExtraTimeEnabled,
-            rule.PenaltyShootoutEnabled);
+            PeriodsCount: rule.PeriodsCount,
+            PeriodDurationMinutes: rule.PeriodDurationMinutes,
+            ExtraTimeEnabled: rule.ExtraTimeEnabled,
+            PenaltyShootoutEnabled: rule.PenaltyShootoutEnabled);
     }
 }

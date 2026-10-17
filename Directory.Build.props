@@ -7,6 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Аудит уязвимостей NuGet требует доступа в интернет. Без него restore падает с
+         NU1900 ("не удалось получить данные уязвимости пакета"), а из-за
+         TreatWarningsAsErrors=true это становится ошибкой и роняет сборку всего решения.
+         Актуально для окружений без сети и для прокси с подменой сертификата. -->
+    <NuGetAudit>false</NuGetAudit>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>

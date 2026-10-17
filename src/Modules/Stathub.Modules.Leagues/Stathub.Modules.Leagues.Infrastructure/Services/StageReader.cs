@@ -1,0 +1,28 @@
+using Stathub.Modules.Leagues.Application.Interfaces;
+using Stathub.Modules.Leagues.Application.Dtos;
+
+namespace Stathub.Modules.Leagues.Infrastructure.Services;
+
+public sealed class StageReader(IStageRepository repository) : IStageReader
+{
+    // Получить правила матча
+    public async Task<StageMatchRulesDto?> GetMatchRulesAsync(
+        Guid stageId,
+        CancellationToken cancellationToken = default)
+    {
+        var stage = await repository.GetByIdAsync(
+            stageId,
+            cancellationToken);
+
+        if (stage is null)
+            return null;
+
+        var rule = stage.MatchFormatRule;
+        
+        return new StageMatchRulesDto(
+            PeriodsCount: rule.PeriodsCount,
+            PeriodDurationMinutes: rule.PeriodDurationMinutes,
+            ExtraTimeEnabled: rule.ExtraTimeEnabled,
+            PenaltyShootoutEnabled: rule.PenaltyShootoutEnabled);
+    }
+}

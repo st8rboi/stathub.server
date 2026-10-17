@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup>  <UserSecretsId>19da5c0d-0b1d-4db5-be60-a2b926907d9e</UserSecretsId>
+<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup>  <UserSecretsId>19da5c0d-0b1d-4db5-be60-a2b926907d9e</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,6 +11,8 @@
     <ProjectReference Include="..\Stathub.Shared\Stathub.Shared.csproj" />
     <ProjectReference Include="..\Stathub.Infrastructure\Stathub.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Stathub.Modules.Leagues\Stathub.Modules.Leagues.Infrastructure\Stathub.Modules.Leagues.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Stathub.Modules.Matches\Stathub.Modules.Matches.Infrastructure\Stathub.Modules.Matches.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Stathub.Modules.Players\Stathub.Modules.Players.Infrastructure\Stathub.Modules.Players.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

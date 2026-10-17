@@ -1,6 +1,6 @@
 using Stathub.Modules.Leagues.Domain.Entities;
 
-namespace Stathub.Modules.Leagues.Application.Abstractions;
+namespace Stathub.Modules.Leagues.Application.Interfaces;
 
 public interface ITournamentRepository
 {

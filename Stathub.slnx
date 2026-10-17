@@ -10,4 +10,10 @@
     <Project Path="src/Modules/Stathub.Modules.Leagues/Stathub.Modules.Leagues.Application/Stathub.Modules.Leagues.Application.csproj" />
     <Project Path="src/Modules/Stathub.Modules.Leagues/Stathub.Modules.Leagues.Infrastructure/Stathub.Modules.Leagues.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Players/">
+    <Project Path="src/Modules/Stathub.Modules.Players/Stathub.Modules.Players.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Players/Stathub.Modules.Players.Domain/Stathub.Modules.Players.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Players/Stathub.Modules.Players.Application/Stathub.Modules.Players.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Players/Stathub.Modules.Players.Infrastructure/Stathub.Modules.Players.Infrastructure.csproj" />
+  </Folder>
 </Solution>

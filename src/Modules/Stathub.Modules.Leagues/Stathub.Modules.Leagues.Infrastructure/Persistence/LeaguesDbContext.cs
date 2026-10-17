@@ -7,6 +7,7 @@ public sealed class LeaguesDbContext(DbContextOptions<LeaguesDbContext> options)
 {
     public DbSet<League> Leagues => Set<League>();
     public DbSet<Tournament> Tournaments => Set<Tournament>();
+    public DbSet<Stage> Stages => Set<Stage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

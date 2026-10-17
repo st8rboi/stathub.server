@@ -2,8 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Stathub.Modules.Leagues.Application;
-using Stathub.Modules.Leagues.Application.Abstractions;
+using Stathub.Modules.Leagues.Application.Interfaces;
 using Stathub.Modules.Leagues.Infrastructure.Persistence;
+using Stathub.Modules.Leagues.Infrastructure.Services;
 
 namespace Stathub.Modules.Leagues.Infrastructure;
 
@@ -19,6 +20,8 @@ public static class LeaguesModule
         services.AddScoped<ITournamentRepository, TournamentRepository>();
         services.AddScoped<LeagueService>();
         services.AddScoped<TournamentService>();
+        services.AddScoped<IStageReader, StageReader>();
+        services.AddScoped<IStageRepository, StageRepository>();
 
         return services;
     }

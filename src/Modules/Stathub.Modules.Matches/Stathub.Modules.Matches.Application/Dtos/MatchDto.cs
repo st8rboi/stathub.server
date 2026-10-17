@@ -6,6 +6,7 @@ namespace Stathub.Modules.Matches.Application.Dtos;
 public sealed record MatchDto(
     Guid Id,
     Guid StageId,
+    Guid TournamentId,
     Guid HomeTeamId,
     Guid AwayTeamId,
     DateTime CreatedAtUtc,
@@ -27,6 +28,7 @@ public sealed record MatchDto(
     internal static MatchDto From(Match match) => new(
         match.Id,
         match.StageId,
+        match.TournamentId,
         match.HomeTeamId,
         match.AwayTeamId,
         match.CreatedAtUtc,

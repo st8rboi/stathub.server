@@ -56,3 +56,6 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Загруженные логотипы (dev-хранилище, не коммитим)
+wwwroot/uploads/

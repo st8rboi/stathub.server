@@ -14,6 +14,9 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.Id).ValueGeneratedNever();
 
         builder.Property(m => m.StageId).IsRequired();
+        // Турнир этапа — контекст заявок и составов; существующие матчи получают пустой Guid
+        // миграцией, новые заполняются из этапа при создании.
+        builder.Property(m => m.TournamentId).IsRequired();
         builder.Property(m => m.HomeTeamId).IsRequired();
         builder.Property(m => m.AwayTeamId).IsRequired();
         builder.Property(m => m.CreatedAtUtc).IsRequired();

@@ -6,6 +6,7 @@ namespace Stathub.Modules.Matches.Infrastructure.Persistence;
 public sealed class MatchesDbContext(DbContextOptions<MatchesDbContext> options) : DbContext(options)
 {
     public DbSet<Match> Matches => Set<Match>();
+    public DbSet<MatchEvent> MatchEvents => Set<MatchEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

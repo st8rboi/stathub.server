@@ -3,7 +3,9 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.WebApi.Infrastructure;
 
-internal sealed class GlobalExceptionHandler(IProblemDetailsService problemDetailsService) : IExceptionHandler
+internal sealed class GlobalExceptionHandler(
+    IProblemDetailsService problemDetailsService,
+    ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -15,12 +17,22 @@ internal sealed class GlobalExceptionHandler(IProblemDetailsService problemDetai
             DomainException => (StatusCodes.Status400BadRequest, "Bad Request"),
             NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
-            _ => (0, string.Empty)
+            // Слишком большое тело запроса (логотип) — отвечаем понятным текстом,
+            // а не дефолтным «An error occurred while processing your request.».
+            BadHttpRequestException => (StatusCodes.Status413PayloadTooLarge, "Payload Too Large"),
+            _ => (StatusCodes.Status500InternalServerError, "Internal Server Error")
         };
 
-        // Непредвиденные исключения оставляем стандартной обработке (500 + лог)
-        if (statusCode == 0)
-            return false;
+        var detail = statusCode == StatusCodes.Status500InternalServerError
+            ? "Внутренняя ошибка сервера. Попробуйте ещё раз; если повторяется — сообщите администратору."
+            : exception.Message;
+
+        if (statusCode == StatusCodes.Status500InternalServerError)
+            logger.LogError(
+                exception,
+                "Необработанное исключение: {Method} {Path}",
+                httpContext.Request.Method,
+                httpContext.Request.Path);
 
         httpContext.Response.StatusCode = statusCode;
 
@@ -32,7 +44,7 @@ internal sealed class GlobalExceptionHandler(IProblemDetailsService problemDetai
             {
                 Status = statusCode,
                 Title = title,
-                Detail = exception.Message
+                Detail = detail
             }
         });
     }

@@ -20,6 +20,7 @@ public sealed class StageReader(IStageRepository repository) : IStageReader
         var rule = stage.MatchFormatRule;
         
         return new StageMatchRulesDto(
+            TournamentId: stage.TournamentId,
             PeriodsCount: rule.PeriodsCount,
             PeriodDurationMinutes: rule.PeriodDurationMinutes,
             ExtraTimeEnabled: rule.ExtraTimeEnabled,

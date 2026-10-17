@@ -1,6 +1,7 @@
 using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Domain.Entities;
+using Stathub.Modules.Matches.Domain.Enums;
 using Stathub.Modules.Matches.Domain.ValueObjects;
 using Stathub.Shared.Exceptions;
 
@@ -27,9 +28,9 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
         DateTime scheduledTimeUtc,
         CancellationToken cancellationToken = default)
     {
-        var matchFormat = await ResolveMatchFormatAsync(stageId, cancellationToken);
+        var (matchFormat, tournamentId) = await ResolveMatchFormatAsync(stageId, cancellationToken);
 
-        var match = Match.Create(stageId, homeTeamId, awayTeamId, scheduledTimeUtc, matchFormat);
+        var match = Match.Create(stageId, tournamentId, homeTeamId, awayTeamId, scheduledTimeUtc, matchFormat);
 
         await repository.AddAsync(match, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -58,6 +59,35 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
             .OrderBy(match => match.ScheduledTimeUtc)
             .Select(MatchDto.From)
             .ToList();
+    }
+
+    /// <summary>
+    /// Матчи, которые идут прямо сейчас (в процессе или на паузе) — публичная live-лента.
+    /// </summary>
+    public async Task<IReadOnlyList<MatchDto>> ListLiveAsync(CancellationToken cancellationToken = default)
+    {
+        var matches = await repository.GetByStatusAsync(
+            [MatchStatus.InProgress, MatchStatus.Pause],
+            cancellationToken);
+
+        return matches
+            .OrderBy(match => match.ScheduledTimeUtc)
+            .Select(MatchDto.From)
+            .ToList();
+    }
+
+    /// <summary>Расписание на интервал: публичная витрина группирует матчи по дням на клиенте.</summary>
+    public async Task<IReadOnlyList<MatchDto>> ListByPeriodAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken = default)
+    {
+        if (toUtc <= fromUtc)
+            throw new DomainException("Конец периода должен быть позже начала.");
+
+        var matches = await repository.GetByPeriodAsync(fromUtc, toUtc, cancellationToken);
+
+        return matches.Select(MatchDto.From).ToList();
     }
 
     #endregion
@@ -126,17 +156,20 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
         ?? throw new NotFoundException($"Матч '{id}' не найден.");
 
     // Правила читаются через интерфейс потребителя (IMatchFormatProvider), реализацию даёт модуль Leagues.
-    private async Task<MatchFormat> ResolveMatchFormatAsync(
+    // Тот же вызов отдаёт турнир этапа: матч запоминает сезон, к которому относится.
+    private async Task<(MatchFormat Format, Guid TournamentId)> ResolveMatchFormatAsync(
         Guid stageId,
         CancellationToken cancellationToken)
     {
         var stageFormat = await matchFormatProvider.GetByStageIdAsync(stageId, cancellationToken);
 
-        return MatchFormat.Create(
+        var format = MatchFormat.Create(
             periodsCount: stageFormat.PeriodsCount,
             periodDurationMinutes: stageFormat.PeriodDurationMinutes,
             extraTimeEnabled: stageFormat.ExtraTimeEnabled,
             penaltyShootoutEnabled: stageFormat.PenaltyShootoutEnabled);
+
+        return (format, stageFormat.TournamentId);
     }
     #endregion
 }

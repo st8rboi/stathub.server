@@ -8,6 +8,7 @@ namespace Stathub.Modules.Matches.Domain.Entities;
 public sealed class Match : AggregateRoot
 {
     public Guid StageId { get; private set; } // Стадия (этап) турнира
+    public Guid TournamentId { get; private set; } // Турнир (сезон) этапа — контекст заявок и составов
     public Guid HomeTeamId { get; private set; } // Первая команда
     public Guid AwayTeamId { get; private set; } // Вторая команда
 
@@ -38,6 +39,7 @@ public sealed class Match : AggregateRoot
     private Match(
         Guid id,
         Guid stageId,
+        Guid tournamentId,
         Guid homeTeamId,
         Guid awayTeamId,
         DateTime scheduledTimeUtc,
@@ -45,6 +47,7 @@ public sealed class Match : AggregateRoot
     {
         Id = id;
         StageId = stageId;
+        TournamentId = tournamentId;
         HomeTeamId = homeTeamId;
         AwayTeamId = awayTeamId;
         ScheduledTimeUtc = scheduledTimeUtc;
@@ -65,6 +68,7 @@ public sealed class Match : AggregateRoot
 
     public static Match Create(
         Guid stageId,
+        Guid tournamentId,
         Guid homeTeamId,
         Guid awayTeamId,
         DateTime scheduledTimeUtc,
@@ -72,6 +76,8 @@ public sealed class Match : AggregateRoot
     {
         if (stageId == Guid.Empty)
             throw new DomainException("StageId обязательное поле.");
+        if (tournamentId == Guid.Empty)
+            throw new DomainException("TournamentId обязательное поле.");
         if (homeTeamId == Guid.Empty)
             throw new DomainException("HomeTeamId обязательное поле.");
         if (awayTeamId == Guid.Empty)
@@ -84,6 +90,7 @@ public sealed class Match : AggregateRoot
         return new Match(
             Guid.NewGuid(),
             stageId,
+            tournamentId,
             homeTeamId,
             awayTeamId,
             scheduledTimeUtc,
@@ -151,5 +158,75 @@ public sealed class Match : AggregateRoot
                 "Матч можно закончить только из состояния в процессе.");
 
         Status = MatchStatus.Finished;
+    }
+
+    /// <summary>
+    /// Проверяет, что протокол ещё можно менять. По документации после финального свистка
+    /// события правит только организатор, но модуля Identity пока нет — поэтому после
+    /// завершения протокол закрыт для всех.
+    /// </summary>
+    public void EnsureEventsCanBeChanged()
+    {
+        if (Status is MatchStatus.Finished or MatchStatus.Cancelled)
+            throw new DomainException(
+                "Матч завершён: протокол можно менять только до финального свистка.");
+    }
+
+    /// <summary>
+    /// Пересчитывает проекцию счёта из протокола: источник истины — лог событий,
+    /// а <see cref="HomeScore"/>/<see cref="AwayScore"/> хранят готовый результат, чтобы не
+    /// суммировать события на каждый запрос (см. документацию, раздел 9).
+    /// Отменённые события (на которые ссылается активный <c>EventVoided</c>) не учитываются,
+    /// а автогол засчитывается сопернику команды, в чьи ворота он забит.
+    /// </summary>
+    public void RebuildScoreProjection(IReadOnlyCollection<MatchEvent> events)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+
+        var voidedEventIds = new HashSet<Guid>();
+        foreach (var matchEvent in events)
+        {
+            EnsureEventBelongsToMatch(matchEvent);
+
+            if (matchEvent.Type == MatchEventType.EventVoided && matchEvent.TargetEventId is { } targetId)
+                voidedEventIds.Add(targetId);
+        }
+
+        var homeScore = 0;
+        var awayScore = 0;
+
+        foreach (var matchEvent in events)
+        {
+            if (voidedEventIds.Contains(matchEvent.Id))
+                continue;
+
+            switch (matchEvent.Type)
+            {
+                case MatchEventType.Goal when matchEvent.TeamId == HomeTeamId:
+                    homeScore++;
+                    break;
+                case MatchEventType.Goal when matchEvent.TeamId == AwayTeamId:
+                    awayScore++;
+                    break;
+                case MatchEventType.OwnGoal when matchEvent.TeamId == HomeTeamId:
+                    awayScore++;
+                    break;
+                case MatchEventType.OwnGoal when matchEvent.TeamId == AwayTeamId:
+                    homeScore++;
+                    break;
+            }
+        }
+
+        HomeScore = homeScore;
+        AwayScore = awayScore;
+    }
+
+    private void EnsureEventBelongsToMatch(MatchEvent matchEvent)
+    {
+        if (matchEvent.MatchId != Id)
+            throw new DomainException("Событие относится к другому матчу.");
+
+        if (matchEvent.TeamId is { } teamId && teamId != HomeTeamId && teamId != AwayTeamId)
+            throw new DomainException("Событие относится к команде, которая не играет в этом матче.");
     }
 }

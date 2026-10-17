@@ -14,6 +14,7 @@ public sealed record LeagueDto(
     string? Region,
     LeagueDataSource DataSource,
     LeagueStatus Status,
+    string? LogoUrl,
     DateTime CreatedAtUtc)
 {
     internal static LeagueDto From(League league) => new(
@@ -26,5 +27,6 @@ public sealed record LeagueDto(
         league.Region,
         league.DataSource,
         league.Status,
+        league.LogoUrl,
         league.CreatedAtUtc);
 }

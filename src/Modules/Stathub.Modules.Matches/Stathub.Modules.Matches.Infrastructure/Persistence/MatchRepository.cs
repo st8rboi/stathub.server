@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Domain.Entities;
+using Stathub.Modules.Matches.Domain.Enums;
 
 namespace Stathub.Modules.Matches.Infrastructure.Persistence;
 
@@ -15,6 +16,29 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
     {
         return await dbContext.Matches
             .Where(m => m.StageId == stageId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Match>> GetByStatusAsync(
+        IReadOnlyCollection<MatchStatus> statuses,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Matches
+            .AsNoTracking()
+            .Where(match => statuses.Contains(match.Status))
+            .OrderBy(match => match.ScheduledTimeUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Match>> GetByPeriodAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Matches
+            .AsNoTracking()
+            .Where(match => match.ScheduledTimeUtc >= fromUtc && match.ScheduledTimeUtc < toUtc)
+            .OrderBy(match => match.ScheduledTimeUtc)
             .ToListAsync(cancellationToken);
     }
 

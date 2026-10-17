@@ -17,6 +17,19 @@ public interface IPlayerRepository
         int limit,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Недавно добавленные игроки — стартовый список на странице админки.</summary>
+    Task<IReadOnlyList<Player>> ListRecentAsync(
+        int limit,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Игроки по набору идентификаторов: нужны потребителям (заявки), чтобы показать состав,
+    /// не зная ничего о таблице игроков.
+    /// </summary>
+    Task<IReadOnlyList<Player>> GetByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(Player player, CancellationToken cancellationToken = default);
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);

@@ -52,12 +52,58 @@ public sealed class LeagueService(ILeagueRepository repository)
         return leagues.Select(LeagueDto.From).ToList();
     }
 
+    /// <summary>
+    /// Публичный каталог лиг с фильтрами «лиги в моём городе» и поиском по названию
+    /// (documentation/doc.md §2.1). Отдаёт только опубликованные лиги — то же правило,
+    /// что и у <see cref="ListAsync"/> без организатора.
+    /// </summary>
+    public async Task<IReadOnlyList<LeagueDto>> ListPublishedAsync(
+        string? query,
+        string? city,
+        CancellationToken cancellationToken = default)
+    {
+        var leagues = await repository.ListAsync(null, LeagueStatus.Published, cancellationToken);
+
+        IEnumerable<League> filtered = leagues;
+
+        if (!string.IsNullOrWhiteSpace(city))
+        {
+            var normalizedCity = city.Trim();
+            filtered = filtered.Where(league =>
+                league.City is not null &&
+                string.Equals(league.City.Trim(), normalizedCity, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var normalizedQuery = query.Trim();
+            filtered = filtered.Where(league =>
+                league.Name.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return filtered.Select(LeagueDto.From).ToList();
+    }
+
     public async Task PublishAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var league = await GetOrThrowAsync(id, cancellationToken);
 
         league.Publish();
         await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Сохраняет путь к загруженному логотипу лиги (null — сбросить).</summary>
+    public async Task<LeagueDto> SetLogoAsync(
+        Guid id,
+        string? logoUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var league = await GetOrThrowAsync(id, cancellationToken);
+
+        league.SetLogo(logoUrl);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return LeagueDto.From(league);
     }
 
     public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)

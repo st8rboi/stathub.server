@@ -18,8 +18,12 @@ public static class MatchesModule
 
         services.AddDbContext<MatchesDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IMatchRepository, MatchRepository>();
+        services.AddScoped<IMatchEventRepository, MatchEventRepository>();
         services.AddScoped<IMatchFormatProvider, MatchFormatProvider>();
+        services.AddScoped<IMatchResultsReader, MatchResultsReader>();
+        services.AddScoped<ITournamentPlayerEventReader, TournamentPlayerEventReader>();
         services.AddScoped<MatchService>();
+        services.AddScoped<MatchEventService>();
         return services;
     }
 }

@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Scalar.AspNetCore;
 using Stathub.Modules.Leagues.Infrastructure;
 using Stathub.Modules.Matches.Infrastructure;
+using Stathub.Modules.Players.Infrastructure;
 using Stathub.WebApi.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +16,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddLeaguesModule(builder.Configuration);
 builder.Services.AddMatchesModule(builder.Configuration);
+builder.Services.AddPlayersModule(builder.Configuration);
 
 var app = builder.Build();
 

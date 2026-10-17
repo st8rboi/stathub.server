@@ -40,6 +40,26 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
     public async Task<MatchDto> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         MatchDto.From(await GetOrThrowAsync(id, cancellationToken));
 
+    /// <summary>
+    /// Матчи этапа в порядке расписания. Ближайший матч — первый в списке.
+    /// </summary>
+    /// <param name="stageId">Этап турнира, матчи которого нужно вернуть</param>
+    /// <param name="cancellationToken"></param>
+    public async Task<IReadOnlyList<MatchDto>> ListByStageAsync(
+        Guid stageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (stageId == Guid.Empty)
+            throw new DomainException("StageId обязательное поле.");
+
+        var matches = await repository.GetByStageIdAsync(stageId, cancellationToken);
+
+        return matches
+            .OrderBy(match => match.ScheduledTimeUtc)
+            .Select(MatchDto.From)
+            .ToList();
+    }
+
     #endregion
 
     #region Управление матчем

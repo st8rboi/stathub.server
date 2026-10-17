@@ -25,6 +25,14 @@ public sealed class MatchesController(MatchService matchService) : ControllerBas
             new { Id = match });
     }
 
+    // Список матчей этапа: по нему судейский клиент выбирает матч для подключения.
+    // Пагинации нет — на объёме одного этапа любительской лиги она не нужна.
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<MatchDto>>> GetMatches(
+        [FromQuery] Guid stageId,
+        CancellationToken cancellationToken) =>
+        Ok(await matchService.ListByStageAsync(stageId, cancellationToken));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<MatchDto>> GetMatchById(Guid id, CancellationToken cancellationToken) =>
         Ok(await matchService.GetByIdAsync(id, cancellationToken));

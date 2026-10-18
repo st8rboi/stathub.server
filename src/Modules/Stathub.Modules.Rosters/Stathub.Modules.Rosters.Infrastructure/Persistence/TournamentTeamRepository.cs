@@ -1,51 +1,54 @@
 using Microsoft.EntityFrameworkCore;
 using Stathub.Modules.Rosters.Application.Interfaces;
 using Stathub.Modules.Rosters.Domain.Entities;
-using Stathub.Modules.Rosters.Domain.Enums;
 
 namespace Stathub.Modules.Rosters.Infrastructure.Persistence;
 
 internal sealed class TournamentTeamRepository(RostersDbContext dbContext) : ITournamentTeamRepository
 {
-    public Task<TournamentTeam?> GetByIdAsync(
-        Guid tournamentTeamId,
-        CancellationToken cancellationToken = default) =>
+    public Task<TournamentTeam?> GetByIdAsync(Guid tournamentTeamId, CancellationToken cancellationToken = default) =>
         dbContext.TournamentTeams
             .Include(tournamentTeam => tournamentTeam.Registrations)
             .FirstOrDefaultAsync(tournamentTeam => tournamentTeam.Id == tournamentTeamId, cancellationToken);
 
-    public Task<TournamentTeam?> GetByTournamentAndTeamAsync(
-        Guid tournamentId,
+    public Task<TournamentTeam?> GetByStageAndTeamAsync(
+        Guid stageId,
         Guid teamId,
         CancellationToken cancellationToken = default) =>
         dbContext.TournamentTeams
             .Include(tournamentTeam => tournamentTeam.Registrations)
             .FirstOrDefaultAsync(
-                tournamentTeam => tournamentTeam.TournamentId == tournamentId && tournamentTeam.TeamId == teamId,
+                tournamentTeam => tournamentTeam.StageId == stageId && tournamentTeam.TeamId == teamId,
                 cancellationToken);
 
-    public async Task<IReadOnlyList<TournamentTeam>> ListByTournamentAsync(
-        Guid tournamentId,
+    public async Task<IReadOnlyList<TournamentTeam>> ListByStageAsync(
+        Guid stageId,
         CancellationToken cancellationToken = default) =>
         await dbContext.TournamentTeams
             .AsNoTracking()
             .Include(tournamentTeam => tournamentTeam.Registrations)
-            .Where(tournamentTeam => tournamentTeam.TournamentId == tournamentId)
+            .Where(tournamentTeam => tournamentTeam.StageId == stageId)
             .OrderBy(tournamentTeam => tournamentTeam.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
     public async Task<Guid?> FindTeamIdWithActiveRegistrationAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid playerId,
-        CancellationToken cancellationToken = default) =>
-        await dbContext.TournamentTeams
+        CancellationToken cancellationToken = default)
+    {
+        var result = await dbContext.TournamentTeams
             .AsNoTracking()
-            .Where(tournamentTeam => tournamentTeam.TournamentId == tournamentId)
-            .SelectMany(tournamentTeam => tournamentTeam.Registrations)
-            .Where(registration =>
-                registration.PlayerId == playerId && registration.Status == PlayerRegistrationStatus.Active)
-            .Select(registration => (Guid?)registration.TournamentTeamId)
+            // Границей уникальности выбран этап: в разных дивизионах турнира
+            // один и тот же игрок может быть заявлен за разные команды.
+            .Where(tournamentTeam => tournamentTeam.StageId == stageId)
+            .Where(tournamentTeam => tournamentTeam.Registrations.Any(registration =>
+                registration.PlayerId == playerId &&
+                registration.Status == Domain.Enums.PlayerRegistrationStatus.Active))
+            .Select(tournamentTeam => (Guid?)tournamentTeam.Id)
             .FirstOrDefaultAsync(cancellationToken);
+
+        return result;
+    }
 
     public async Task AddAsync(TournamentTeam tournamentTeam, CancellationToken cancellationToken = default) =>
         await dbContext.TournamentTeams.AddAsync(tournamentTeam, cancellationToken);

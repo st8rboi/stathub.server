@@ -76,6 +76,15 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
             .ToList();
     }
 
+    /// <summary>Матчи по идентификаторам: используется «моими матчами» судьи.</summary>
+    public async Task<IReadOnlyList<MatchDto>> GetByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var matches = await repository.GetByIdsAsync(ids, cancellationToken);
+        return matches.Select(MatchDto.From).ToList();
+    }
+
     /// <summary>Расписание на интервал: публичная витрина группирует матчи по дням на клиенте.</summary>
     public async Task<IReadOnlyList<MatchDto>> ListByPeriodAsync(
         DateTime fromUtc,

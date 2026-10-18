@@ -13,24 +13,23 @@ internal sealed class TournamentTeamConfiguration : IEntityTypeConfiguration<Tou
         builder.HasKey(tournamentTeam => tournamentTeam.Id);
         builder.Property(tournamentTeam => tournamentTeam.Id).ValueGeneratedNever();
 
-        // Ссылки на турнир и команду — обычные Guid: межмодульные FK запрещены,
-        // существование проверяется читателями модулей Leagues и Teams.
+        builder.Property(tournamentTeam => tournamentTeam.StageId).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.TournamentId).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.TeamId).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.Status).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.CreatedAtUtc).IsRequired();
 
-        // Одна команда — одна заявка на турнир.
-        builder.HasIndex(tournamentTeam => new { tournamentTeam.TournamentId, tournamentTeam.TeamId })
-            .IsUnique();
+        // Команда заявляется один раз на этап. В разных дивизионах того же турнира
+        // одна и та же команда может играть — это отдельные заявки.
+        builder.HasIndex(tournamentTeam => new { tournamentTeam.StageId, tournamentTeam.TeamId }).IsUnique();
+        builder.HasIndex(tournamentTeam => tournamentTeam.TournamentId);
 
-        builder.HasMany(tournamentTeam => tournamentTeam.Registrations)
+        builder
+            .HasMany(tournamentTeam => tournamentTeam.Registrations)
             .WithOne()
             .HasForeignKey(registration => registration.TournamentTeamId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Состав живёт в приватном списке _registrations.
-        builder.Navigation(tournamentTeam => tournamentTeam.Registrations)
-            .UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(tournamentTeam => tournamentTeam.Registrations).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

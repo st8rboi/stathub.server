@@ -5,17 +5,26 @@ using Stathub.Shared.Exceptions;
 namespace Stathub.Modules.Rosters.Domain.Entities;
 
 /// <summary>
-/// Заявка команды на турнир (сезон). Одна команда — одна заявка на турнир.
-/// Состав (игроки) живёт внутри этой заявки, поэтому трансфер — это закрытие старой заявки
-/// игрока и открытие новой в другой команде: история матчей и событий не рвётся (§7).
+/// Заявка команды на этап турнира (группа, дивизион, плей-офф). Именно этап, а не турнир:
+/// в одном турнире бывают параллельные дивизионы, и в каждом играют свои команды.
+/// <para>
+/// Турнир хранится рядом как контекст: по нему проверяется блокировка заявок на завершённый
+/// турнир. Уникальность игрока ограничена этапом: в разных дивизионах одного турнира
+/// он может играть за разные команды.
+/// </para>
 /// </summary>
 public sealed class TournamentTeam : AggregateRoot
 {
     private readonly List<PlayerRegistration> _registrations = [];
 
+    public Guid StageId { get; private set; }
+
     public Guid TournamentId { get; private set; }
+
     public Guid TeamId { get; private set; }
+
     public TournamentTeamStatus Status { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     public IReadOnlyCollection<PlayerRegistration> Registrations => _registrations.AsReadOnly();
@@ -24,29 +33,32 @@ public sealed class TournamentTeam : AggregateRoot
     {
     }
 
-    private TournamentTeam(Guid id, Guid tournamentId, Guid teamId)
+    private TournamentTeam(Guid id, Guid stageId, Guid tournamentId, Guid teamId)
     {
         Id = id;
+        StageId = stageId;
         TournamentId = tournamentId;
         TeamId = teamId;
         Status = TournamentTeamStatus.Active;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
-    public static TournamentTeam Create(Guid tournamentId, Guid teamId)
+    public static TournamentTeam Create(Guid stageId, Guid tournamentId, Guid teamId)
     {
+        if (stageId == Guid.Empty)
+            throw new DomainException("StageId обязательное поле.");
         if (tournamentId == Guid.Empty)
             throw new DomainException("TournamentId обязательное поле.");
         if (teamId == Guid.Empty)
             throw new DomainException("TeamId обязательное поле.");
 
-        return new TournamentTeam(Guid.NewGuid(), tournamentId, teamId);
+        return new TournamentTeam(Guid.NewGuid(), stageId, tournamentId, teamId);
     }
 
     public PlayerRegistration RegisterPlayer(Guid playerId, int? squadNumber, DateOnly joinedOn)
     {
         if (Status != TournamentTeamStatus.Active)
-            throw new ConflictException("Команда снята с турнира: заявить игрока нельзя.");
+            throw new ConflictException("Команда снята с этапа: заявить игрока нельзя.");
         if (playerId == Guid.Empty)
             throw new DomainException("PlayerId обязательное поле.");
 
@@ -96,11 +108,11 @@ public sealed class TournamentTeam : AggregateRoot
         return registration;
     }
 
-    /// <summary>Снятие команды с турнира: все активные заявки закрываются, история остаётся.</summary>
+    /// <summary>Снятие команды с этапа: все активные заявки закрываются, история остаётся.</summary>
     public void Withdraw(DateOnly date)
     {
         if (Status != TournamentTeamStatus.Active)
-            throw new ConflictException("Команда уже снята с турнира.");
+            throw new ConflictException("Команда уже снята с этапа.");
 
         Status = TournamentTeamStatus.Withdrawn;
 

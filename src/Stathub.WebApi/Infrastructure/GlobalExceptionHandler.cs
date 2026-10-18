@@ -17,6 +17,7 @@ internal sealed class GlobalExceptionHandler(
             DomainException => (StatusCodes.Status400BadRequest, "Bad Request"),
             NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
+            ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             // Слишком большое тело запроса (логотип) — отвечаем понятным текстом,
             // а не дефолтным «An error occurred while processing your request.».
             BadHttpRequestException => (StatusCodes.Status413PayloadTooLarge, "Payload Too Large"),

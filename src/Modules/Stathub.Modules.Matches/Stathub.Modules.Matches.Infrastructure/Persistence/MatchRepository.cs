@@ -30,6 +30,20 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Match>> GetByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0)
+            return [];
+
+        return await dbContext.Matches
+            .AsNoTracking()
+            .Where(match => ids.Contains(match.Id))
+            .OrderBy(match => match.ScheduledTimeUtc)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Match>> GetByPeriodAsync(
         DateTime fromUtc,
         DateTime toUtc,

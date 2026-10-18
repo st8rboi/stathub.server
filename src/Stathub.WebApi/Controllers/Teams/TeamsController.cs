@@ -1,17 +1,23 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stathub.Infrastructure.Storage;
 using Stathub.Modules.Teams.Application;
 using Stathub.Modules.Teams.Application.Dtos;
 using Stathub.WebApi.Contracts.Teams;
+using Stathub.WebApi.Infrastructure.Auth;
 using Stathub.WebApi.Infrastructure.Uploads;
 
 namespace Stathub.WebApi.Controllers.Teams;
 
 [ApiController]
 [Route("teams")]
+// Чтение справочника нужно всем в организации (судья показывает названия команд),
+// запись — только организатору (см. атрибуты на POST/DELETE ниже).
+[Authorize(Policy = AuthPolicies.TenantMember)]
 public sealed class TeamsController(TeamService teamService, ILogoStorage logoStorage) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> CreateTeam(CreateTeamRequest request, CancellationToken cancellationToken)
     {
         var teamId = await teamService.CreateAsync(request.Name, request.City, cancellationToken);
@@ -53,6 +59,7 @@ public sealed class TeamsController(TeamService teamService, ILogoStorage logoSt
 
     /// <summary>Загрузка логотипа команды: файл кладётся в хранилище, в БД — только путь.</summary>
     [HttpPost("{id:guid}/logo")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     // Лимит выше бизнес-лимита (2 МБ), чтобы размер проверяла наша валидация и отвечала
     // понятным текстом, а не «Request body too large» от формата формы.
     [RequestSizeLimit(LogoFile.MaxRequestBytes)]
@@ -92,6 +99,7 @@ public sealed class TeamsController(TeamService teamService, ILogoStorage logoSt
     }
 
     [HttpDelete("{id:guid}/logo")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<ActionResult<TeamDto>> DeleteLogo(Guid id, CancellationToken cancellationToken)
     {
         var current = await teamService.GetByIdAsync(id, cancellationToken);

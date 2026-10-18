@@ -7,21 +7,22 @@ public interface ITournamentTeamRepository
     /// <summary>Заявка с составом (отслеживается EF: её меняют операции заявок).</summary>
     Task<TournamentTeam?> GetByIdAsync(Guid tournamentTeamId, CancellationToken cancellationToken = default);
 
-    Task<TournamentTeam?> GetByTournamentAndTeamAsync(
-        Guid tournamentId,
+    Task<TournamentTeam?> GetByStageAndTeamAsync(
+        Guid stageId,
         Guid teamId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<TournamentTeam>> ListByTournamentAsync(
-        Guid tournamentId,
+    Task<IReadOnlyList<TournamentTeam>> ListByStageAsync(
+        Guid stageId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Команда турнира, за которую игрок заявлен сейчас. Нужна, чтобы не допустить игрока
-    /// в две команды одного турнира: переход оформляется трансфером.
+    /// Команда этапа, за которую игрок заявлен сейчас. Нужна, чтобы не допустить игрока
+    /// в две команды одного дивизиона: переход оформляется трансфером. В разных дивизионах
+    /// того же турнира игрок играть может.
     /// </summary>
     Task<Guid?> FindTeamIdWithActiveRegistrationAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid playerId,
         CancellationToken cancellationToken = default);
 

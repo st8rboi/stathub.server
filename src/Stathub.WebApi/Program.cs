@@ -1,7 +1,17 @@
+using System.Text;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Stathub.Infrastructure.Storage;
+using Stathub.Modules.Discipline.Infrastructure;
+using Stathub.Modules.Discipline.Infrastructure.Persistence;
+using Stathub.Modules.Matches.Application.Interfaces;
+using Stathub.Modules.Finance.Infrastructure;
+using Stathub.Modules.Identity.Application.Interfaces;
+using Stathub.Modules.Identity.Domain.Enums;
+using Stathub.Modules.Identity.Infrastructure;
 using Stathub.Modules.Leagues.Infrastructure;
 using Stathub.Modules.Matches.Infrastructure;
 using Stathub.Modules.Players.Infrastructure;
@@ -15,7 +25,11 @@ using Stathub.Modules.Statistics.Infrastructure.Services;
 using Stathub.Modules.Teams.Infrastructure;
 using Stathub.WebApi.Hubs;
 using Stathub.WebApi.Infrastructure;
+using Stathub.WebApi.Infrastructure.Auth;
+using Stathub.WebApi.Infrastructure.Discipline;
+using Stathub.WebApi.Infrastructure.Ops;
 using Stathub.WebApi.Infrastructure.Public;
+using Stathub.WebApi.Infrastructure.Referee;
 using Stathub.WebApi.Infrastructure.Uploads;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -49,6 +63,68 @@ builder.Services.AddMatchesModule(builder.Configuration);
 builder.Services.AddPlayersModule(builder.Configuration);
 builder.Services.AddTeamsModule(builder.Configuration);
 builder.Services.AddRostersModule(builder.Configuration);
+builder.Services.AddIdentityModule(builder.Configuration);
+builder.Services.AddFinanceModule(builder.Configuration);
+builder.Services.AddDisciplineModule(builder.Configuration);
+builder.Services.AddScoped<IPlayerEligibility, PlayerEligibilityAdapter>();
+
+// Identity: текущий пользователь из claims + JWT-аутентификация.
+// Публичной регистрации нет — аккаунты выдаются административно (см. IdentityOps).
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+
+// Проверка владения объектом (лига/турнир) для админских маршрутов с Id в URL.
+builder.Services.AddScoped<TenantOwnershipGuard>();
+builder.Services.AddScoped<OwnedLeagueFilter>();
+builder.Services.AddScoped<OwnedTournamentFilter>();
+builder.Services.AddScoped<OwnedStageFilter>();
+builder.Services.AddScoped<StageRosterAccessFilter>();
+builder.Services.AddScoped<MatchAccessGuard>();
+
+// «Мои матчи» судьи: назначения из Identity + матчи и команды из соответствующих модулей.
+builder.Services.AddScoped<RefereeReadService>();
+
+var jwtKey = builder.Configuration["Jwt:Key"] ?? string.Empty;
+if (jwtKey.Length < 32)
+    throw new InvalidOperationException(
+        "Jwt:Key не настроен или короче 32 символов. Задайте его в appsettings.Development.json " +
+        "или переменной окружения Jwt__Key.");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Claims читаем как есть (sub/tenant_id/role), без маппинга на длинные URI.
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "stathub",
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "stathub-api",
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+            NameClaimType = "unique_name",
+            RoleClaimType = "role"
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AuthPolicies.TenantMember, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireClaim("tenant_id"));
+
+    options.AddPolicy(AuthPolicies.Organizer, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireClaim("role", nameof(UserRole.Organizer), nameof(UserRole.Admin)));
+
+    options.AddPolicy(AuthPolicies.Referee, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireClaim("role", nameof(UserRole.Referee)));
+});
 
 // Standings — чистое чтение без своего DbContext, поэтому регистрация без модульного extension:
 // порты таблицы реализуются адаптерами поверх читателей Leagues/Matches/Teams.
@@ -86,6 +162,13 @@ builder.Services.Configure<FormOptions>(options =>
 
 var app = builder.Build();
 
+// Служебные команды (создание организации и организатора) — без запуска HTTP-сервера.
+if (IdentityOps.Matches(args))
+{
+    Environment.ExitCode = await IdentityOps.RunAsync(app.Services, args);
+    return;
+}
+
 app.UseExceptionHandler();
 
 // Логотипы команд и лиг: файлы из wwwroot/uploads отдаются как статика.
@@ -102,6 +185,9 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<MatchHub>("/hubs/matches");

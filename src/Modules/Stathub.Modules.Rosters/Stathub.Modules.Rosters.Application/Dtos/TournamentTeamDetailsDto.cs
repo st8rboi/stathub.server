@@ -6,6 +6,7 @@ namespace Stathub.Modules.Rosters.Application.Dtos;
 /// <summary>Заявка команды вместе с составом (включая закрытые заявки — история не скрывается).</summary>
 public sealed record TournamentTeamDetailsDto(
     Guid Id,
+    Guid StageId,
     Guid TournamentId,
     Guid TeamId,
     TournamentTeamStatus Status,
@@ -13,6 +14,7 @@ public sealed record TournamentTeamDetailsDto(
 {
     internal static TournamentTeamDetailsDto From(TournamentTeam tournamentTeam) => new(
         tournamentTeam.Id,
+        tournamentTeam.StageId,
         tournamentTeam.TournamentId,
         tournamentTeam.TeamId,
         tournamentTeam.Status,

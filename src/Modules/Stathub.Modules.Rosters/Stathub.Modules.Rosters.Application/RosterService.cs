@@ -1,43 +1,44 @@
 using Stathub.Modules.Rosters.Application.Dtos;
 using Stathub.Modules.Rosters.Application.Interfaces;
 using Stathub.Modules.Rosters.Domain.Entities;
+using Stathub.Modules.Rosters.Domain.Enums;
 using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Rosters.Application;
 
 /// <summary>
-/// Заявки команд и игроков на турнир (сезон).
-///
+/// Заявки команд и игроков на этап турнира (группа/дивизион/плей-офф).
 /// <para>
-/// Модуль ссылается на турнир, команду и игрока только по <c>Guid</c> и проверяет их существование
-/// через читатели модулей-поставщиков: межмодульные FK и прямые ссылки на чужие домены запрещены
-/// (AGENTS.md).
+/// Модуль ссылается на этап, турнир, команду и игрока только по <c>Guid</c> и проверяет
+/// их существование через читатели модулей-поставщиков: межмодульные FK запрещены (AGENTS.md).
 /// </para>
 /// <para>
-/// Правила: одна команда — одна заявка на турнир; игрок — не больше одной активной заявки в турнире;
-/// игровой номер уникален среди активных в команде; менять заявки можно, пока турнир не завершён.
+/// Правила: команда заявляется один раз на этап (в разных дивизионах может играть одна и та же
+/// команда); игрок — не больше одной активной заявки в пределах этапа, но может играть
+/// в нескольких дивизионах одного турнира; менять заявки можно, пока турнир не завершён.
 /// </para>
 /// </summary>
 public sealed class RosterService(
     ITournamentTeamRepository repository,
-    ITournamentInfoProvider tournamentInfo,
+    IStageInfoProvider stageInfo,
     ITeamExistsProvider teamExists,
     IPlayerExistsProvider playerExists)
 {
     public async Task<Guid> AddTeamAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid teamId,
         CancellationToken cancellationToken = default)
     {
-        await EnsureRosterChangeableAsync(tournamentId, cancellationToken);
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
 
         if (!await teamExists.ExistsAsync(teamId, cancellationToken))
             throw new NotFoundException($"Команда '{teamId}' не найдена.");
 
-        if (await repository.GetByTournamentAndTeamAsync(tournamentId, teamId, cancellationToken) is not null)
-            throw new ConflictException("Команда уже заявлена в этом турнире.");
+        if (await repository.GetByStageAndTeamAsync(stageId, teamId, cancellationToken) is not null)
+            throw new ConflictException("Команда уже заявлена на этот этап.");
 
-        var tournamentTeam = TournamentTeam.Create(tournamentId, teamId);
+        var tournamentTeam = TournamentTeam.Create(stageId, stage.TournamentId, teamId);
 
         await repository.AddAsync(tournamentTeam, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -46,39 +47,40 @@ public sealed class RosterService(
     }
 
     public async Task<IReadOnlyList<TournamentTeamDto>> ListTeamsAsync(
-        Guid tournamentId,
+        Guid stageId,
         CancellationToken cancellationToken = default)
     {
-        var teams = await repository.ListByTournamentAsync(tournamentId, cancellationToken);
+        var teams = await repository.ListByStageAsync(stageId, cancellationToken);
         return teams.Select(TournamentTeamDto.From).ToList();
     }
 
     public async Task<TournamentTeamDetailsDto> GetTeamAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid tournamentTeamId,
         CancellationToken cancellationToken = default)
     {
-        var tournamentTeam = await GetTeamOrThrowAsync(tournamentId, tournamentTeamId, cancellationToken);
+        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
         return TournamentTeamDetailsDto.From(tournamentTeam);
     }
 
     public async Task<Guid> RegisterPlayerAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid tournamentTeamId,
         Guid playerId,
         int? squadNumber,
         CancellationToken cancellationToken = default)
     {
-        await EnsureRosterChangeableAsync(tournamentId, cancellationToken);
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
 
-        var tournamentTeam = await GetTeamOrThrowAsync(tournamentId, tournamentTeamId, cancellationToken);
+        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
 
         if (!await playerExists.ExistsAsync(playerId, cancellationToken))
             throw new NotFoundException($"Игрок '{playerId}' не найден.");
 
-        if (await repository.FindTeamIdWithActiveRegistrationAsync(tournamentId, playerId, cancellationToken) is not null)
+        if (await repository.FindTeamIdWithActiveRegistrationAsync(stageId, playerId, cancellationToken) is not null)
             throw new ConflictException(
-                "Игрок уже заявлен за другую команду этого турнира — оформите трансфер вместо новой заявки.");
+                "Игрок уже заявлен за другую команду этого этапа — оформите трансфер вместо новой заявки.");
 
         var registration = tournamentTeam.RegisterPlayer(
             playerId,
@@ -92,40 +94,39 @@ public sealed class RosterService(
 
     /// <summary>Отзаявка игрока: заявка закрывается, но остаётся в истории.</summary>
     public async Task ReleasePlayerAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid tournamentTeamId,
         Guid registrationId,
         CancellationToken cancellationToken = default)
     {
-        await EnsureRosterChangeableAsync(tournamentId, cancellationToken);
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
 
-        var tournamentTeam = await GetTeamOrThrowAsync(tournamentId, tournamentTeamId, cancellationToken);
+        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
         tournamentTeam.ReleasePlayer(registrationId, DateOnly.FromDateTime(DateTime.UtcNow));
 
         await repository.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Трансфер: закрывает заявку игрока в команде-источнике и открывает новую в команде назначения
-    /// того же турнира. Обе записи остаются в истории.
-    /// </summary>
+    /// <summary>Трансфер внутри этапа: закрывает заявку в команде-источнике и открывает в новой.</summary>
     public async Task TransferPlayerAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid playerId,
         Guid fromTeamId,
         Guid toTeamId,
         int? squadNumber = null,
         CancellationToken cancellationToken = default)
     {
-        await EnsureRosterChangeableAsync(tournamentId, cancellationToken);
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
 
         if (fromTeamId == toTeamId)
             throw new DomainException("Нельзя перевести игрока в ту же самую команду.");
 
-        var from = await repository.GetByTournamentAndTeamAsync(tournamentId, fromTeamId, cancellationToken)
-            ?? throw new NotFoundException("Команда-источник не заявлена в этом турнире.");
-        var to = await repository.GetByTournamentAndTeamAsync(tournamentId, toTeamId, cancellationToken)
-            ?? throw new NotFoundException("Команда назначения не заявлена в этом турнире.");
+        var from = await repository.GetByStageAndTeamAsync(stageId, fromTeamId, cancellationToken)
+            ?? throw new NotFoundException("Команда-источник не заявлена на этот этап.");
+        var to = await repository.GetByStageAndTeamAsync(stageId, toTeamId, cancellationToken)
+            ?? throw new NotFoundException("Команда назначения не заявлена на этот этап.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -137,36 +138,46 @@ public sealed class RosterService(
     }
 
     public async Task WithdrawTeamAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid tournamentTeamId,
         CancellationToken cancellationToken = default)
     {
-        await EnsureRosterChangeableAsync(tournamentId, cancellationToken);
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
 
-        var tournamentTeam = await GetTeamOrThrowAsync(tournamentId, tournamentTeamId, cancellationToken);
+        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
         tournamentTeam.Withdraw(DateOnly.FromDateTime(DateTime.UtcNow));
 
         await repository.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task EnsureRosterChangeableAsync(Guid tournamentId, CancellationToken cancellationToken)
-    {
-        var tournament = await tournamentInfo.GetAsync(tournamentId, cancellationToken)
-            ?? throw new NotFoundException($"Турнир '{tournamentId}' не найден.");
+    /// <summary>Заявлена ли команда на этап — используется при создании матча.</summary>
+    public async Task<bool> IsTeamRegisteredAsync(
+        Guid stageId,
+        Guid teamId,
+        CancellationToken cancellationToken = default) =>
+        await repository.GetByStageAndTeamAsync(stageId, teamId, cancellationToken)
+            is { Status: TournamentTeamStatus.Active };
 
-        if (tournament.RosterLocked)
+    private async Task<StageRosterInfo> GetStageOrThrowAsync(Guid stageId, CancellationToken cancellationToken) =>
+        await stageInfo.GetAsync(stageId, cancellationToken)
+        ?? throw new NotFoundException($"Этап '{stageId}' не найден.");
+
+    private static void EnsureRosterChangeable(StageRosterInfo stage)
+    {
+        if (stage.RosterLocked)
             throw new ConflictException("Турнир завершён или отменён: заявки менять нельзя.");
     }
 
     private async Task<TournamentTeam> GetTeamOrThrowAsync(
-        Guid tournamentId,
+        Guid stageId,
         Guid tournamentTeamId,
         CancellationToken cancellationToken)
     {
         var tournamentTeam = await repository.GetByIdAsync(tournamentTeamId, cancellationToken);
 
-        if (tournamentTeam is null || tournamentTeam.TournamentId != tournamentId)
-            throw new NotFoundException($"Заявка команды '{tournamentTeamId}' не найдена в этом турнире.");
+        if (tournamentTeam is null || tournamentTeam.StageId != stageId)
+            throw new NotFoundException($"Заявка команды '{tournamentTeamId}' не найдена на этом этапе.");
 
         return tournamentTeam;
     }

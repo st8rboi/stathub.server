@@ -21,7 +21,8 @@ namespace Stathub.Modules.Matches.Application;
 /// </summary>
 public sealed class MatchEventService(
     IMatchRepository matchRepository,
-    IMatchEventRepository eventRepository)
+    IMatchEventRepository eventRepository,
+    IPlayerEligibility playerEligibility)
 {
     public async Task<MatchStateDto> GetStateAsync(
         Guid matchId,
@@ -82,6 +83,7 @@ public sealed class MatchEventService(
         var allEvents = existing.Concat(accepted).ToList();
 
         EnsureVoidTargetsExist(accepted, allEvents);
+        await EnsurePlayersEligibleAsync(match, accepted, cancellationToken);
 
         // Пересчёт — до сохранения: если событие противоречит матчу, ничего не запишется.
         match.RebuildScoreProjection(allEvents);
@@ -94,6 +96,41 @@ public sealed class MatchEventService(
         }
 
         return new AppendEventsResultDto(acceptedIds, duplicateIds, BuildState(match, allEvents));
+    }
+
+    /// <summary>
+    /// Дисквалифицированный игрок не может участвовать в матче: гол, карточка или замена
+    /// с его участием отклоняются. Проверка — по БД на каждый батч, отзыв действует сразу.
+    /// </summary>
+    private async Task EnsurePlayersEligibleAsync(
+        Match match,
+        IReadOnlyList<MatchEvent> accepted,
+        CancellationToken cancellationToken)
+    {
+        foreach (var matchEvent in accepted)
+        {
+            if (matchEvent.TeamId is not { } teamId)
+                continue;
+
+            foreach (var playerId in new[] { matchEvent.PlayerId, matchEvent.RelatedPlayerId })
+            {
+                if (playerId is not { } id)
+                    continue;
+
+                var left = await playerEligibility.GetBanLeftAsync(
+                    match.TournamentId,
+                    teamId,
+                    id,
+                    cancellationToken);
+
+                if (left is null)
+                    continue;
+
+                throw new DomainException(left == int.MaxValue
+                    ? "Игрок дисквалифицирован бессрочно — событие с его участием записать нельзя."
+                    : $"Игрок дисквалифицирован: осталось матчей — {left}.");
+            }
+        }
     }
 
     private static void EnsureVoidTargetsExist(

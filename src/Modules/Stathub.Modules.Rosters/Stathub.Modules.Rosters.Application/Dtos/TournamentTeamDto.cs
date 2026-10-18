@@ -3,9 +3,10 @@ using Stathub.Modules.Rosters.Domain.Enums;
 
 namespace Stathub.Modules.Rosters.Application.Dtos;
 
-/// <summary>Заявка команды в списке участников турнира.</summary>
+/// <summary>Заявка команды на этап в списке участников дивизиона.</summary>
 public sealed record TournamentTeamDto(
     Guid Id,
+    Guid StageId,
     Guid TournamentId,
     Guid TeamId,
     TournamentTeamStatus Status,
@@ -14,6 +15,7 @@ public sealed record TournamentTeamDto(
 {
     internal static TournamentTeamDto From(TournamentTeam tournamentTeam) => new(
         tournamentTeam.Id,
+        tournamentTeam.StageId,
         tournamentTeam.TournamentId,
         tournamentTeam.TeamId,
         tournamentTeam.Status,

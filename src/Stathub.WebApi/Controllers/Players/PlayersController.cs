@@ -1,15 +1,21 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stathub.Modules.Players.Application;
 using Stathub.Modules.Players.Application.Dtos;
 using Stathub.WebApi.Contracts.Players;
+using Stathub.WebApi.Infrastructure.Auth;
 
 namespace Stathub.WebApi.Controllers.Players;
 
 [ApiController]
 [Route("players")]
+// Чтение нужно всем в организации (судья показывает авторов событий),
+// создание — только организатору.
+[Authorize(Policy = AuthPolicies.TenantMember)]
 public sealed class PlayersController(PlayerService playerService) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> CreatePlayer(CreatePlayerRequest request, CancellationToken cancellationToken)
     {
         var playerId = await playerService.CreateAsync(request.FullName, request.BirthDate, cancellationToken);

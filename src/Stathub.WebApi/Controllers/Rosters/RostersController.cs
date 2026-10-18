@@ -1,54 +1,59 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stathub.Modules.Rosters.Application;
 using Stathub.Modules.Rosters.Application.Dtos;
 using Stathub.WebApi.Contracts.Rosters;
+using Stathub.WebApi.Infrastructure.Auth;
 
 namespace Stathub.WebApi.Controllers.Rosters;
 
 /// <summary>
-/// Заявки команд и игроков на турнир: маршруты вложены в турнир, потому что заявка
-/// существует только в его рамках.
+/// Заявки команд и игроков на этап (группа/дивизион/плей-офф): маршруты вложены в этап,
+/// потому что в одном турнире бывает несколько параллельных дивизионов со своими командами.
 /// </summary>
 [ApiController]
-[Route("tournaments/{tournamentId:guid}")]
+[Route("stages/{stageId:guid}")]
+// Читать заявки может и судья (состав нужен для автора гола) — доступ проверяет фильтр.
+[Authorize(Policy = AuthPolicies.TenantMember)]
+[ServiceFilter(typeof(StageRosterAccessFilter))]
 public sealed class RostersController(RosterService rosterService) : ControllerBase
 {
     [HttpPost("teams")]
     public async Task<IActionResult> AddTeam(
-        Guid tournamentId,
+        Guid stageId,
         AddTournamentTeamRequest request,
         CancellationToken cancellationToken)
     {
-        var tournamentTeamId = await rosterService.AddTeamAsync(tournamentId, request.TeamId, cancellationToken);
+        var tournamentTeamId = await rosterService.AddTeamAsync(stageId, request.TeamId, cancellationToken);
 
         return CreatedAtAction(
             nameof(GetTeam),
-            new { tournamentId, id = tournamentTeamId },
+            new { stageId, id = tournamentTeamId },
             new { Id = tournamentTeamId });
     }
 
     [HttpGet("teams")]
     public async Task<ActionResult<IReadOnlyList<TournamentTeamDto>>> GetTeams(
-        Guid tournamentId,
+        Guid stageId,
         CancellationToken cancellationToken) =>
-        Ok(await rosterService.ListTeamsAsync(tournamentId, cancellationToken));
+        Ok(await rosterService.ListTeamsAsync(stageId, cancellationToken));
 
     [HttpGet("teams/{id:guid}")]
     public async Task<ActionResult<TournamentTeamDetailsDto>> GetTeam(
-        Guid tournamentId,
+        Guid stageId,
         Guid id,
         CancellationToken cancellationToken) =>
-        Ok(await rosterService.GetTeamAsync(tournamentId, id, cancellationToken));
+        Ok(await rosterService.GetTeamAsync(stageId, id, cancellationToken));
 
     [HttpPost("teams/{id:guid}/players")]
     public async Task<ActionResult<object>> RegisterPlayer(
-        Guid tournamentId,
+        Guid stageId,
         Guid id,
         RegisterPlayerRequest request,
         CancellationToken cancellationToken)
     {
         var registrationId = await rosterService.RegisterPlayerAsync(
-            tournamentId,
+            stageId,
             id,
             request.PlayerId,
             request.SquadNumber,
@@ -59,23 +64,23 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
 
     [HttpPost("teams/{id:guid}/players/{registrationId:guid}/release")]
     public async Task<IActionResult> ReleasePlayer(
-        Guid tournamentId,
+        Guid stageId,
         Guid id,
         Guid registrationId,
         CancellationToken cancellationToken)
     {
-        await rosterService.ReleasePlayerAsync(tournamentId, id, registrationId, cancellationToken);
+        await rosterService.ReleasePlayerAsync(stageId, id, registrationId, cancellationToken);
         return NoContent();
     }
 
     [HttpPost("transfers")]
     public async Task<IActionResult> TransferPlayer(
-        Guid tournamentId,
+        Guid stageId,
         TransferPlayerRequest request,
         CancellationToken cancellationToken)
     {
         await rosterService.TransferPlayerAsync(
-            tournamentId,
+            stageId,
             request.PlayerId,
             request.FromTeamId,
             request.ToTeamId,
@@ -87,11 +92,11 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
 
     [HttpPost("teams/{id:guid}/withdraw")]
     public async Task<IActionResult> WithdrawTeam(
-        Guid tournamentId,
+        Guid stageId,
         Guid id,
         CancellationToken cancellationToken)
     {
-        await rosterService.WithdrawTeamAsync(tournamentId, id, cancellationToken);
+        await rosterService.WithdrawTeamAsync(stageId, id, cancellationToken);
         return NoContent();
     }
 }

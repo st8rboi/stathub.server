@@ -78,6 +78,9 @@ public sealed class PublicReadService(
         var stage = await stagePublicReader.GetAsync(stageId, cancellationToken)
             ?? throw new NotFoundException($"Этап '{stageId}' не найден.");
 
+        // Публично виден только этап опубликованной лиги: черновики и архив не показываем.
+        await EnsurePublishedAsync(stage.TournamentId, new Dictionary<Guid, bool>(), cancellationToken);
+
         var matches = await matchService.ListByStageAsync(stageId, cancellationToken);
         var teams = await GetTeamsAsync(CollectTeamIds(matches), cancellationToken);
 
@@ -94,6 +97,11 @@ public sealed class PublicReadService(
     {
         var state = await matchEventService.GetStateAsync(matchId, cancellationToken);
         var stage = await stagePublicReader.GetAsync(state.Match.StageId, cancellationToken);
+
+        if (stage is null)
+            throw new NotFoundException($"Матч '{matchId}' не найден.");
+
+        await EnsurePublishedAsync(stage.TournamentId, new Dictionary<Guid, bool>(), cancellationToken);
 
         var teams = await GetTeamsAsync(
             [state.Match.HomeTeamId, state.Match.AwayTeamId],
@@ -132,9 +140,23 @@ public sealed class PublicReadService(
         if (matches.Count == 0) return [];
 
         var stages = await LoadStagesAsync(matches, cancellationToken);
-        var teams = await GetTeamsAsync(CollectTeamIds(matches), cancellationToken);
+        var published = new Dictionary<Guid, bool>();
+        var visible = new List<MatchDto>(matches.Count);
 
-        return matches
+        foreach (var match in matches)
+        {
+            var stage = stages.GetValueOrDefault(match.StageId);
+            if (stage is null) continue;
+            if (!await IsPublishedAsync(stage.TournamentId, published, cancellationToken)) continue;
+
+            visible.Add(match);
+        }
+
+        if (visible.Count == 0) return [];
+
+        var teams = await GetTeamsAsync(CollectTeamIds(visible), cancellationToken);
+
+        return visible
             .Select(match => ToPublicMatch(match, stages.GetValueOrDefault(match.StageId), teams))
             .ToList();
     }
@@ -149,11 +171,54 @@ public sealed class PublicReadService(
         if (matches.Count == 0) return [];
 
         var stages = await LoadStagesAsync(matches, cancellationToken);
-        var teams = await GetTeamsAsync(CollectTeamIds(matches), cancellationToken);
+        var published = new Dictionary<Guid, bool>();
+        var visible = new List<MatchDto>(matches.Count);
 
-        return matches
+        foreach (var match in matches)
+        {
+            var stage = stages.GetValueOrDefault(match.StageId);
+
+            // Матч без этапа (старые тестовые данные) и матч неопубликованной лиги
+            // в публичное расписание не попадают — иначе полоса дат считает одно,
+            // а список показывает другое.
+            if (stage is null) continue;
+            if (!await IsPublishedAsync(stage.TournamentId, published, cancellationToken)) continue;
+
+            visible.Add(match);
+        }
+
+        if (visible.Count == 0) return [];
+
+        var teams = await GetTeamsAsync(CollectTeamIds(visible), cancellationToken);
+
+        return visible
             .Select(match => ToPublicMatch(match, stages.GetValueOrDefault(match.StageId), teams))
             .ToList();
+    }
+
+    /// <summary>Опубликована ли лига турнира; результат кэшируется на время одного запроса.</summary>
+    private async Task<bool> IsPublishedAsync(
+        Guid tournamentId,
+        Dictionary<Guid, bool> cache,
+        CancellationToken cancellationToken)
+    {
+        if (cache.TryGetValue(tournamentId, out var known))
+            return known;
+
+        var info = await tournamentReader.GetPublicInfoAsync(tournamentId, cancellationToken);
+        var published = info?.IsPublished == true;
+        cache[tournamentId] = published;
+
+        return published;
+    }
+
+    private async Task EnsurePublishedAsync(
+        Guid tournamentId,
+        Dictionary<Guid, bool> cache,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsPublishedAsync(tournamentId, cache, cancellationToken))
+            throw new NotFoundException("Турнир не опубликован.");
     }
 
     /// <summary>Статистика игроков по турниру — вкладка «Статистика» на витрине.</summary>

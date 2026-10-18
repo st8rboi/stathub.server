@@ -9,6 +9,11 @@ public interface IMatchRepository
 
     Task<IReadOnlyList<Match>> GetByStageIdAsync(Guid stageId, CancellationToken cancellationToken = default);
 
+    /// <summary>Матчи по набору идентификаторов — «мои матчи» судьи по назначениям.</summary>
+    Task<IReadOnlyList<Match>> GetByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Матчи в заданных статусах — публичная live-лента «сейчас играют».</summary>
     Task<IReadOnlyList<Match>> GetByStatusAsync(
         IReadOnlyCollection<MatchStatus> statuses,

@@ -58,4 +58,6 @@ TestResult.xml
 nunit-*.xml
 
 # Загруженные логотипы (dev-хранилище, не коммитим)
-wwwroot/uploads/
+output_directory/
+**/wwwroot/uploads/
+

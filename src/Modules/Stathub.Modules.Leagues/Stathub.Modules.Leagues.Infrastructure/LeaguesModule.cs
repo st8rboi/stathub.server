@@ -15,7 +15,13 @@ public static class LeaguesModule
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
 
-        services.AddDbContext<LeaguesDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<LeaguesDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    "__EFMigrationsHistory_Leagues",
+                    "public")));
+                    
         services.AddScoped<ILeagueRepository, LeagueRepository>();
         services.AddScoped<ITournamentRepository, TournamentRepository>();
         services.AddScoped<LeagueService>();

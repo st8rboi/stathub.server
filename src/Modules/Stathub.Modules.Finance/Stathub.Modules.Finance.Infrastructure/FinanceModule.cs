@@ -15,8 +15,13 @@ public static class FinanceModule
     {
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
-
-        services.AddDbContext<FinanceDbContext>(options => options.UseNpgsql(connectionString));
+            
+        services.AddDbContext<FinanceDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    "__EFMigrationsHistory_Finance",
+                    "public")));
 
         services.AddScoped<IFeeSettingRepository, FeeSettingRepository>();
         services.AddScoped<IMatchChargeRepository, MatchChargeRepository>();

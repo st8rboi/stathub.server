@@ -17,7 +17,12 @@ public static class IdentityModule
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
 
-        services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<IdentityDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    "__EFMigrationsHistory_Identity",
+                    "public")));
 
         // Читаем настройки вручную: класс-опция простой, а Binder в зависимостях модуля не нужен.
         var jwtOptions = new JwtOptions

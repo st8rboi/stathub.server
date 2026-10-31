@@ -17,7 +17,12 @@ public static class RostersModule
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
 
-        services.AddDbContext<RostersDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<RostersDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    "__EFMigrationsHistory_Rosters",
+                    "public")));
 
         services.AddScoped<ITournamentTeamRepository, TournamentTeamRepository>();
         services.AddScoped<IStageInfoProvider, StageInfoProvider>();

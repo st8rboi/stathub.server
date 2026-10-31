@@ -162,6 +162,9 @@ builder.Services.Configure<FormOptions>(options =>
 
 var app = builder.Build();
 
+await DatabaseMigrationInitializer.ApplyMigrationsAsync(
+    app.Services);
+
 // Служебные команды (создание организации и организатора) — без запуска HTTP-сервера.
 if (IdentityOps.Matches(args))
 {

@@ -14,6 +14,12 @@ public static class TeamsModule
     {
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
+        services.AddDbContext<TeamsDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    "__EFMigrationsHistory_Teams",
+                    "public")));
 
         services.AddDbContext<TeamsDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<ITeamRepository, TeamRepository>();

@@ -28,6 +28,12 @@ public sealed class Team : AggregateRoot
     /// </summary>
     public string? LogoUrl { get; private set; }
 
+    /// <summary>
+    /// Организация, загрузившая логотип. Команда общая для всех лиг, поэтому логотип закрепляется
+    /// за первым загрузившим: остальные его переиспользуют или меняют через техподдержку.
+    /// </summary>
+    public Guid? LogoOwnerTenantId { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     private Team()
@@ -79,14 +85,35 @@ public sealed class Team : AggregateRoot
         City = normalizedCity;
     }
 
-    /// <summary>Устанавливает или сбрасывает логотип (<paramref name="logoUrl"/> = null — удалить).</summary>
-    public void SetLogo(string? logoUrl)
+    /// <summary>Логотип без владельца свободен; занятый может менять только его владелец.</summary>
+    public void EnsureCanChangeLogo(Guid tenantId)
     {
+        if (LogoUrl is not null && LogoOwnerTenantId != tenantId)
+            throw new ForbiddenException(
+                "Логотип команды уже загружен другим организатором. Заменить его можно через техподдержку.");
+    }
+
+    /// <summary>
+    /// Устанавливает или сбрасывает логотип (<paramref name="logoUrl"/> = null — удалить,
+    /// после чего логотип снова может загрузить любой организатор).
+    /// </summary>
+    public void SetLogo(string? logoUrl, Guid tenantId)
+    {
+        EnsureCanChangeLogo(tenantId);
+
         var normalized = string.IsNullOrWhiteSpace(logoUrl) ? null : logoUrl.Trim();
 
         if (normalized is { Length: > 500 })
             throw new DomainException("Путь к логотипу не может быть длиннее 500 символов.");
 
         LogoUrl = normalized;
+        LogoOwnerTenantId = normalized is null ? null : tenantId;
+    }
+
+    /// <summary>Сброс логотипа техподдержкой: снимает закрепление за организацией.</summary>
+    public void ResetLogo()
+    {
+        LogoUrl = null;
+        LogoOwnerTenantId = null;
     }
 }

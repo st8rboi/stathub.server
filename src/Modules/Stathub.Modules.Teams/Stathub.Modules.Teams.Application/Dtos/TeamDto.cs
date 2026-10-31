@@ -7,6 +7,7 @@ public sealed record TeamDto(
     string Name,
     string? City,
     string? LogoUrl,
+    Guid? LogoOwnerTenantId,
     DateTime CreatedAtUtc)
 {
     internal static TeamDto From(Team team) => new(
@@ -14,5 +15,6 @@ public sealed record TeamDto(
         team.Name,
         team.City,
         team.LogoUrl,
+        team.LogoOwnerTenantId,
         team.CreatedAtUtc);
 }

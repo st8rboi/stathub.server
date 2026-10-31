@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stathub.Infrastructure.Storage;
+using Stathub.Modules.Identity.Application.Interfaces;
 using Stathub.Modules.Teams.Application;
 using Stathub.Modules.Teams.Application.Dtos;
 using Stathub.WebApi.Contracts.Teams;
@@ -14,7 +15,10 @@ namespace Stathub.WebApi.Controllers.Teams;
 // Чтение справочника нужно всем в организации (судья показывает названия команд),
 // запись — только организатору (см. атрибуты на POST/DELETE ниже).
 [Authorize(Policy = AuthPolicies.TenantMember)]
-public sealed class TeamsController(TeamService teamService, ILogoStorage logoStorage) : ControllerBase
+public sealed class TeamsController(
+    TeamService teamService,
+    ILogoStorage logoStorage,
+    ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = AuthPolicies.Organizer)]
@@ -73,7 +77,7 @@ public sealed class TeamsController(TeamService teamService, ILogoStorage logoSt
         if (error is not null)
             return Problem(detail: error, statusCode: StatusCodes.Status400BadRequest);
 
-        var current = await teamService.GetByIdAsync(id, cancellationToken);
+        var current = await teamService.GetForLogoChangeAsync(id, currentUser.TenantId, cancellationToken);
 
         await using var stream = file.OpenReadStream();
 
@@ -90,7 +94,7 @@ public sealed class TeamsController(TeamService teamService, ILogoStorage logoSt
                 statusCode: StatusCodes.Status500InternalServerError);
         }
 
-        var team = await teamService.SetLogoAsync(id, logoUrl, cancellationToken);
+        var team = await teamService.SetLogoAsync(id, logoUrl, currentUser.TenantId, cancellationToken);
 
         // Старый файл больше не нужен: в БД уже новый путь.
         await logoStorage.DeleteAsync(current.LogoUrl, cancellationToken);
@@ -102,8 +106,8 @@ public sealed class TeamsController(TeamService teamService, ILogoStorage logoSt
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<ActionResult<TeamDto>> DeleteLogo(Guid id, CancellationToken cancellationToken)
     {
-        var current = await teamService.GetByIdAsync(id, cancellationToken);
-        var team = await teamService.SetLogoAsync(id, null, cancellationToken);
+        var current = await teamService.GetForLogoChangeAsync(id, currentUser.TenantId, cancellationToken);
+        var team = await teamService.SetLogoAsync(id, null, currentUser.TenantId, cancellationToken);
 
         await logoStorage.DeleteAsync(current.LogoUrl, cancellationToken);
 

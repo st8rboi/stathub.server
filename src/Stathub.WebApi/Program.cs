@@ -1,7 +1,11 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Stathub.Infrastructure.Storage;
@@ -126,6 +130,41 @@ builder.Services.AddAuthorization(options =>
         .RequireClaim("role", nameof(UserRole.Referee)));
 });
 
+// Защита входа от подбора пароля: счётчик неудач по паре «логин + IP» и общий предел запросов с IP.
+builder.Services.AddSingleton<LoginThrottle>();
+
+var loginIpLimit = builder.Configuration.GetValue("Auth:LoginIpLimitPerMinute", LoginThrottle.DefaultIpLimitPerMinute);
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = (context, cancellationToken) =>
+        new ValueTask(context.HttpContext.Response.WriteAsJsonAsync(
+            new ProblemDetails
+            {
+                Status = StatusCodes.Status429TooManyRequests,
+                Title = "Too Many Requests",
+                Detail = "Слишком много попыток входа с этого адреса. Повторите через минуту."
+            },
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken));
+
+    options.AddPolicy(LoginThrottle.IpPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = loginIpLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+});
+
+// За nginx адрес клиента приходит в X-Forwarded-For. По умолчанию заголовку верим только с loopback:
+// подделка извне не поможет обойти предел, а прокси в другой сети надо будет указать явно в KnownProxies.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+
 // Standings — чистое чтение без своего DbContext, поэтому регистрация без модульного extension:
 // порты таблицы реализуются адаптерами поверх читателей Leagues/Matches/Teams.
 builder.Services.AddScoped<IStandingsRulesSource, StandingsRulesSource>();
@@ -172,6 +211,13 @@ if (IdentityOps.Matches(args))
     return;
 }
 
+if (TeamOps.Matches(args))
+{
+    Environment.ExitCode = await TeamOps.RunAsync(app.Services, args);
+    return;
+}
+
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 
 // Логотипы команд и лиг: файлы из wwwroot/uploads отдаются как статика.
@@ -189,6 +235,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -196,3 +244,6 @@ app.MapControllers();
 app.MapHub<MatchHub>("/hubs/matches");
 
 app.Run();
+
+// Точка входа для WebApplicationFactory в интеграционных тестах.
+public partial class Program;

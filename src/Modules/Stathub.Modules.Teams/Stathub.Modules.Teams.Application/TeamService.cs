@@ -29,20 +29,50 @@ public sealed class TeamService(ITeamRepository repository)
     public async Task<TeamDto> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         TeamDto.From(await GetOrThrowAsync(id, cancellationToken));
 
+    /// <summary>
+    /// Команда, если организации разрешено менять её логотип. Проверка до сохранения файла:
+    /// иначе при отказе в хранилище останется файл, на который никто не ссылается.
+    /// </summary>
+    public async Task<TeamDto> GetForLogoChangeAsync(
+        Guid id,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var team = await GetOrThrowAsync(id, cancellationToken);
+        team.EnsureCanChangeLogo(tenantId);
+
+        return TeamDto.From(team);
+    }
+
     /// <summary>Сохраняет путь к загруженному логотипу (null — сбросить).</summary>
     public async Task<TeamDto> SetLogoAsync(
         Guid id,
         string? logoUrl,
+        Guid tenantId,
         CancellationToken cancellationToken = default)
     {
         // Читаем с отслеживанием: иначе EF не заметит изменение и SaveChanges ничего не запишет.
         var team = await repository.GetForUpdateAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Команда '{id}' не найдена.");
 
-        team.SetLogo(logoUrl);
+        team.SetLogo(logoUrl, tenantId);
         await repository.SaveChangesAsync(cancellationToken);
 
         return TeamDto.From(team);
+    }
+
+    /// <summary>Сброс логотипа техподдержкой (см. TeamOps). Возвращает путь к старому файлу.</summary>
+    public async Task<string?> ResetLogoAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var team = await repository.GetForUpdateAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Команда '{id}' не найдена.");
+
+        var previousLogoUrl = team.LogoUrl;
+
+        team.ResetLogo();
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return previousLogoUrl;
     }
 
     public async Task<IReadOnlyList<TeamDto>> ListAsync(

@@ -25,6 +25,7 @@ public sealed record LiftDisqualificationRequest(string? Comment);
 public sealed class DisciplineController(
     DisciplineService disciplineService,
     Stathub.Modules.Leagues.Application.Interfaces.IStagePublicReader stageReader,
+    TenantOwnershipGuard ownershipGuard,
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpGet("tournaments/{tournamentId:guid}")]
@@ -63,6 +64,9 @@ public sealed class DisciplineController(
         LiftDisqualificationRequest request,
         CancellationToken cancellationToken)
     {
+        var tournamentId = await disciplineService.GetTournamentIdAsync(id, cancellationToken);
+        await ownershipGuard.EnsureTournamentAsync(tournamentId, cancellationToken);
+
         await disciplineService.LiftAsync(id, request.Comment, cancellationToken);
         return NoContent();
     }

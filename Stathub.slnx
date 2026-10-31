@@ -59,5 +59,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Stathub.Modules.Matches.Domain.Tests/Stathub.Modules.Matches.Domain.Tests.csproj" />
+    <Project Path="tests/Stathub.WebApi.IntegrationTests/Stathub.WebApi.IntegrationTests.csproj" />
   </Folder>
 </Solution>

@@ -39,11 +39,14 @@ public sealed class MatchAccessGuard(
             throw new ForbiddenException("Этот матч вам не назначен.");
     }
 
-    /// <summary>Для этапа: организатор проверяется на владение лигой, судья — фильтрацией списка.</summary>
+    /// <summary>
+    /// Весь этап доступен только организатору своей лиги. Остальным роль закрывает доступ:
+    /// судья получает лишь отфильтрованный список назначенных матчей (см. MatchesController).
+    /// </summary>
     public async Task EnsureStageAsync(Guid stageId, CancellationToken cancellationToken = default)
     {
         if (currentUser.Role is not (UserRole.Organizer or UserRole.Admin))
-            return;
+            throw new ForbiddenException("Этот этап вам недоступен.");
 
         var stage = await stagePublicReader.GetAsync(stageId, cancellationToken)
             ?? throw new NotFoundException($"Этап '{stageId}' не найден.");

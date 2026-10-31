@@ -119,6 +119,15 @@ public sealed class FeeService(
             .ToList();
     }
 
+    /// <summary>Турнир начисления — для проверки владения: Id начисления приходит из URL.</summary>
+    public async Task<Guid> GetChargeTournamentIdAsync(Guid chargeId, CancellationToken cancellationToken = default)
+    {
+        var charge = await charges.GetByIdAsync(chargeId, cancellationToken)
+            ?? throw new NotFoundException("Начисление не найдено.");
+
+        return charge.TournamentId;
+    }
+
     public async Task MarkPaidAsync(
         Guid chargeId,
         PaymentMethod method,

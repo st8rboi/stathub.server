@@ -23,7 +23,10 @@ public sealed record CancelChargeRequest(string? Comment);
 [ApiController]
 [Route("finance")]
 [Authorize(Policy = AuthPolicies.Organizer)]
-public sealed class FinanceController(FeeService feeService, ICurrentUser currentUser) : ControllerBase
+public sealed class FinanceController(
+    FeeService feeService,
+    TenantOwnershipGuard ownershipGuard,
+    ICurrentUser currentUser) : ControllerBase
 {
     [HttpGet("tournaments/{tournamentId:guid}/settings")]
     [ServiceFilter(typeof(OwnedTournamentFilter))]
@@ -75,6 +78,7 @@ public sealed class FinanceController(FeeService feeService, ICurrentUser curren
         PayChargeRequest request,
         CancellationToken cancellationToken)
     {
+        await EnsureOwnedChargeAsync(id, cancellationToken);
         await feeService.MarkPaidAsync(id, request.Method, request.Comment, cancellationToken);
         return NoContent();
     }
@@ -85,6 +89,7 @@ public sealed class FinanceController(FeeService feeService, ICurrentUser curren
         CancelChargeRequest request,
         CancellationToken cancellationToken)
     {
+        await EnsureOwnedChargeAsync(id, cancellationToken);
         await feeService.CancelAsync(id, request.Comment, cancellationToken);
         return NoContent();
     }
@@ -103,4 +108,10 @@ public sealed class FinanceController(FeeService feeService, ICurrentUser curren
         Guid tournamentId,
         CancellationToken cancellationToken) =>
         Ok(await feeService.GetTeamDebtsAsync(tournamentId, cancellationToken));
+
+    private async Task EnsureOwnedChargeAsync(Guid chargeId, CancellationToken cancellationToken)
+    {
+        var tournamentId = await feeService.GetChargeTournamentIdAsync(chargeId, cancellationToken);
+        await ownershipGuard.EnsureTournamentAsync(tournamentId, cancellationToken);
+    }
 }

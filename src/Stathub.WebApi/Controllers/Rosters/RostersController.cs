@@ -14,11 +14,13 @@ namespace Stathub.WebApi.Controllers.Rosters;
 [ApiController]
 [Route("stages/{stageId:guid}")]
 // Читать заявки может и судья (состав нужен для автора гола) — доступ проверяет фильтр.
+// Запись — только организатору (см. атрибуты на POST ниже).
 [Authorize(Policy = AuthPolicies.TenantMember)]
 [ServiceFilter(typeof(StageRosterAccessFilter))]
 public sealed class RostersController(RosterService rosterService) : ControllerBase
 {
     [HttpPost("teams")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> AddTeam(
         Guid stageId,
         AddTournamentTeamRequest request,
@@ -46,6 +48,7 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
         Ok(await rosterService.GetTeamAsync(stageId, id, cancellationToken));
 
     [HttpPost("teams/{id:guid}/players")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<ActionResult<object>> RegisterPlayer(
         Guid stageId,
         Guid id,
@@ -63,6 +66,7 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
     }
 
     [HttpPost("teams/{id:guid}/players/{registrationId:guid}/release")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> ReleasePlayer(
         Guid stageId,
         Guid id,
@@ -74,6 +78,7 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
     }
 
     [HttpPost("transfers")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> TransferPlayer(
         Guid stageId,
         TransferPlayerRequest request,
@@ -91,6 +96,7 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
     }
 
     [HttpPost("teams/{id:guid}/withdraw")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> WithdrawTeam(
         Guid stageId,
         Guid id,

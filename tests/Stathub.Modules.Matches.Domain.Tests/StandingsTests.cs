@@ -112,7 +112,8 @@ public sealed class StandingsTests
         var second = StandingsCalculator.Calculate(matches, Classic);
 
         Assert.Equal(first.Select(row => row.TeamId), second.Select(row => row.TeamId));
-        // При полном равенстве порядок стабилизирован по Id команды.
-        Assert.Equal(Alpha, first[0].TeamId);
+        // Gamma сыграла два матча и набрала больше очков; Alpha и Beta равны по всем критериям,
+        // и порядок между ними стабилизирован по Id команды.
+        Assert.Equal([Gamma, Alpha, Beta], first.Select(row => row.TeamId));
     }
 }

@@ -95,6 +95,15 @@ public sealed class DisciplineService(
         return disqualification.Id;
     }
 
+    /// <summary>Турнир дисквалификации — для проверки владения: Id приходит из URL.</summary>
+    public async Task<Guid> GetTournamentIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var disqualification = await repository.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Дисквалификация не найдена.");
+
+        return disqualification.TournamentId;
+    }
+
     public async Task LiftAsync(Guid id, string? comment, CancellationToken cancellationToken = default)
     {
         var disqualification = await repository.GetByIdAsync(id, cancellationToken)

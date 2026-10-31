@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Stathub.Modules.Discipline.Infrastructure.Persistence;
 using Stathub.Modules.Finance.Infrastructure.Persistence;
 using Stathub.Modules.Identity.Infrastructure.Persistence;
 using Stathub.Modules.Leagues.Infrastructure.Persistence;
@@ -35,6 +36,9 @@ public static class DatabaseMigrationInitializer
             serviceProvider, cancellationToken);
 
         await ApplyAsync<FinanceDbContext>(
+            serviceProvider, cancellationToken);
+
+        await ApplyAsync<DisciplineDbContext>(
             serviceProvider, cancellationToken);
     }
 

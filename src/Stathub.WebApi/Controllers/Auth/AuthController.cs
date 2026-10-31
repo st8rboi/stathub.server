@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Stathub.Modules.Identity.Application;
 using Stathub.Modules.Identity.Application.Dtos;
 using Stathub.Modules.Identity.Application.Interfaces;
+using Stathub.Shared.Exceptions;
 using Stathub.WebApi.Contracts.Auth;
+using Stathub.WebApi.Infrastructure.Auth;
 
 namespace Stathub.WebApi.Controllers.Auth;
 
@@ -13,12 +16,41 @@ namespace Stathub.WebApi.Controllers.Auth;
 /// </summary>
 [ApiController]
 [Route("auth")]
-public sealed class AuthController(AuthService authService, ICurrentUser currentUser) : ControllerBase
+public sealed class AuthController(
+    AuthService authService,
+    LoginThrottle loginThrottle,
+    ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<ActionResult<AuthResultDto>> Login(LoginRequest request, CancellationToken cancellationToken) =>
-        Ok(await authService.LoginAsync(request.Login, request.Password, request.TenantId, cancellationToken));
+    [EnableRateLimiting(LoginThrottle.IpPolicy)]
+    public async Task<ActionResult<AuthResultDto>> Login(LoginRequest request, CancellationToken cancellationToken)
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress;
+
+        if (!loginThrottle.TryBeginAttempt(request.Login, ip, out var retryAfter))
+        {
+            var seconds = (int)Math.Ceiling(retryAfter.TotalSeconds);
+            Response.Headers.RetryAfter = seconds.ToString();
+
+            return Problem(
+                detail: $"Слишком много неудачных попыток входа. Повторите через {Math.Max(1, seconds / 60)} мин.",
+                statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        try
+        {
+            var result = await authService.LoginAsync(request.Login, request.Password, request.TenantId, cancellationToken);
+            loginThrottle.Reset(request.Login, ip);
+
+            return Ok(result);
+        }
+        catch (Exception exception) when (exception is not DomainException)
+        {
+            loginThrottle.ReleaseAttempt(request.Login, ip);
+            throw;
+        }
+    }
 
     [HttpPost("refresh")]
     [AllowAnonymous]

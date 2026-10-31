@@ -35,6 +35,9 @@ namespace Stathub.Modules.Teams.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("LogoOwnerTenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

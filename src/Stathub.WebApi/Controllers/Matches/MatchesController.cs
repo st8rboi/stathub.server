@@ -32,6 +32,7 @@ public sealed class MatchesController(
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> CreateMatch(CreateMatchRequest request, CancellationToken cancellationToken)
     {
         // Новый матч создаётся только в рамках своего этапа.

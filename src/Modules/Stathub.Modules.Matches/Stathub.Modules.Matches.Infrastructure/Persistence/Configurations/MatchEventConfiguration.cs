@@ -25,7 +25,10 @@ internal sealed class MatchEventConfiguration : IEntityTypeConfiguration<MatchEv
 
         builder.Property(matchEvent => matchEvent.Reason).HasMaxLength(512);
 
+        builder.Property(matchEvent => matchEvent.ReviewNote).HasMaxLength(256);
+
         builder.Property(matchEvent => matchEvent.ClientTimestampUtc).IsRequired();
+        builder.Property(matchEvent => matchEvent.OccurredAtUtc);
         builder.Property(matchEvent => matchEvent.SequenceNumber).IsRequired();
         builder.Property(matchEvent => matchEvent.CreatedAtUtc).IsRequired();
 

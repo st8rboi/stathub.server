@@ -36,6 +36,10 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         // Заполняются только когда матч начат, до старта CurrentPeriod = 0
         builder.Property(m => m.CurrentPeriod).IsRequired();
         builder.Property(m => m.PeriodStartedAtUtc);
+        builder.Property(m => m.PausedAtUtc);
+        builder.Property(m => m.PeriodPausedMilliseconds).IsRequired();
+        builder.Property(m => m.FinishedAtUtc);
+        builder.Property(m => m.EventsForReview).IsRequired();
 
         builder.HasIndex(m => m.StageId);
     }

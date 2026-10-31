@@ -109,8 +109,8 @@ public sealed class MatchesController(
         return Ok(await matchEventService.GetStateAsync(id, cancellationToken));
     }
 
-    // Батч событий протокола. Идемпотентно по клиентскому UUID: повторы из офлайн-очереди
-    // не создают дублей и возвращаются в duplicateEventIds.
+    // Батч событий протокола, включая смену статуса матча. Идемпотентно по клиентскому UUID:
+    // повторы из офлайн-очереди не создают дублей и возвращаются в duplicateEventIds.
     [HttpPost("{id:guid}/events")]
     public async Task<ActionResult<AppendEventsResultDto>> AppendEvents(
         Guid id,
@@ -123,58 +123,12 @@ public sealed class MatchesController(
             .Select(ToNewEvent)
             .ToList();
 
-        var result = await matchEventService.AppendEventsAsync(id, events, cancellationToken);
+        var result = await matchEventService.AppendEventsAsync(id, events, request.SentAtUtc, cancellationToken);
 
         // Пуш зрителям — только после коммита; сам пуш best-effort (doc §4, §9).
         await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
 
         return Ok(result);
-    }
-
-    [HttpPost("{id:guid}/start")]
-    public async Task<IActionResult> StartMatch(Guid id, CancellationToken cancellationToken)
-    {
-        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
-        await matchService.StartMatchAsync(id, cancellationToken);
-        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
-        return NoContent();
-    }
-
-    [HttpPost("{id:guid}/stop")]
-    public async Task<IActionResult> StopMatch(Guid id, CancellationToken cancellationToken)
-    {
-        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
-        await matchService.StopMatchAsync(id, cancellationToken);
-        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
-        return NoContent();
-    }
-
-    [HttpPost("{id:guid}/resume")]
-    public async Task<IActionResult> ResumeMatch(Guid id, CancellationToken cancellationToken)
-    {
-        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
-        await matchService.ResumeMatchAsync(id, cancellationToken);
-        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
-        return NoContent();
-    }
-
-    // Отдельное действие судьи, а не следствие resume: пауза бывает и внутри периода
-    [HttpPost("{id:guid}/next-period")]
-    public async Task<IActionResult> StartNextPeriod(Guid id, CancellationToken cancellationToken)
-    {
-        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
-        await matchService.StartNextPeriodAsync(id, cancellationToken);
-        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
-        return NoContent();
-    }
-
-    [HttpPost("{id:guid}/finish")]
-    public async Task<IActionResult> FinishMatch(Guid id, CancellationToken cancellationToken)
-    {
-        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
-        await matchService.FinishMatchAsync(id, cancellationToken);
-        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
-        return NoContent();
     }
 
     /// <summary>

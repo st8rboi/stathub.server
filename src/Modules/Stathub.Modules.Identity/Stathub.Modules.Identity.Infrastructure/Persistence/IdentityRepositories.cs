@@ -99,8 +99,9 @@ internal sealed class RefreshTokenRepository(IdentityDbContext dbContext) : IRef
 
     public async Task RevokeAllForUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        // Заменённые токены тоже: иначе старый токен прожил бы окно повторного использования.
         var activeTokens = await dbContext.RefreshTokens
-            .Where(token => token.UserId == userId && token.RevokedAtUtc == null)
+            .Where(token => token.UserId == userId && (token.RevokedAtUtc == null || token.RotatedAtUtc != null))
             .ToListAsync(cancellationToken);
 
         foreach (var token in activeTokens)

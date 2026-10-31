@@ -22,6 +22,7 @@ namespace Stathub.Modules.Matches.Domain.Entities;
 public sealed class MatchEvent : Entity
 {
     private const int ReasonMaxLength = 512;
+    private const int ReviewNoteMaxLength = 256;
 
     public Guid MatchId { get; private set; }
     public MatchEventType Type { get; private set; }
@@ -47,6 +48,18 @@ public sealed class MatchEvent : Entity
     /// <summary>Момент события по часам устройства судьи (может расходиться с серверным).</summary>
     public DateTime ClientTimestampUtc { get; private set; }
 
+    /// <summary>
+    /// Момент события с поправкой на расхождение часов устройства и сервера.
+    /// У событий, принятых до появления поправки, пусто — для них берётся клиентское время.
+    /// </summary>
+    public DateTime? OccurredAtUtc { get; private set; }
+
+    /// <summary>
+    /// Пометка для организатора: событие принято как факт с поля, но требует разбора
+    /// (например, участвовал дисквалифицированный игрок). На счёт не влияет.
+    /// </summary>
+    public string? ReviewNote { get; private set; }
+
     /// <summary>Порядковый номер события внутри матча, назначается клиентом.</summary>
     public long SequenceNumber { get; private set; }
 
@@ -67,6 +80,7 @@ public sealed class MatchEvent : Entity
         Guid? targetEventId,
         string? reason,
         DateTime clientTimestampUtc,
+        DateTime occurredAtUtc,
         long sequenceNumber)
     {
         Id = id;
@@ -78,6 +92,7 @@ public sealed class MatchEvent : Entity
         TargetEventId = targetEventId;
         Reason = reason;
         ClientTimestampUtc = clientTimestampUtc;
+        OccurredAtUtc = occurredAtUtc;
         SequenceNumber = sequenceNumber;
         CreatedAtUtc = DateTime.UtcNow;
     }
@@ -92,7 +107,8 @@ public sealed class MatchEvent : Entity
         Guid? targetEventId,
         string? reason,
         DateTime clientTimestampUtc,
-        long sequenceNumber)
+        long sequenceNumber,
+        DateTime? occurredAtUtc = null)
     {
         if (id == Guid.Empty)
             throw new DomainException("Событие должно иметь идентификатор, сгенерированный клиентом (UUID).");
@@ -119,7 +135,21 @@ public sealed class MatchEvent : Entity
             targetEventId,
             normalizedReason,
             clientTimestampUtc,
+            occurredAtUtc ?? clientTimestampUtc,
             sequenceNumber);
+    }
+
+    public bool IsLifecycle => Type is MatchEventType.MatchStarted
+        or MatchEventType.MatchPaused
+        or MatchEventType.MatchResumed
+        or MatchEventType.PeriodStarted
+        or MatchEventType.MatchFinished;
+
+    public DateTime EffectiveTimeUtc => OccurredAtUtc ?? ClientTimestampUtc;
+
+    public void MarkForReview(string note)
+    {
+        ReviewNote = note.Length > ReviewNoteMaxLength ? note[..ReviewNoteMaxLength] : note;
     }
 
     private static void ValidateTypeRules(
@@ -158,6 +188,13 @@ public sealed class MatchEvent : Entity
                     throw new DomainException("Отмена должна ссылаться на отменяемое событие.");
                 if (targetEventId == id)
                     throw new DomainException("Событие не может отменять само себя.");
+                break;
+
+            case MatchEventType.MatchStarted:
+            case MatchEventType.MatchPaused:
+            case MatchEventType.MatchResumed:
+            case MatchEventType.PeriodStarted:
+            case MatchEventType.MatchFinished:
                 break;
 
             default:

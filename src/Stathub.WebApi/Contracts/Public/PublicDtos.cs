@@ -67,14 +67,16 @@ public sealed record PublicMatchDto(
     int PeriodsCount,
     DateTime ScheduledTimeUtc,
     DateTime? StartedAtUtc,
-    DateTime? PeriodStartedAtUtc);
+    DateTime? PeriodStartedAtUtc,
+    DateTime? PausedAtUtc,
+    long PeriodPausedMilliseconds);
 
 public sealed record PublicEventDto(
     Guid Id,
     string Type,
     string? TeamName,
     string? PlayerName,
-    DateTime ClientTimestampUtc,
+    DateTime OccurredAtUtc,
     bool IsVoided,
     string? Reason);
 

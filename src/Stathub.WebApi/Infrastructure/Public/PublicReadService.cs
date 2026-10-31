@@ -4,6 +4,7 @@ using Stathub.Modules.Leagues.Application.Interfaces;
 using Stathub.Modules.Leagues.Domain.Enums;
 using Stathub.Modules.Matches.Application;
 using Stathub.Modules.Matches.Application.Dtos;
+using Stathub.Modules.Matches.Domain.Enums;
 using Stathub.Modules.Players.Application;
 using Stathub.Modules.Standings.Application;
 using Stathub.Modules.Statistics.Application;
@@ -119,13 +120,15 @@ public sealed class PublicReadService(
 
         var playerNames = players.ToDictionary(player => player.Id, player => player.FullName);
 
+        // Паузы внутри периода — служебная деталь судьи, зрителю они видны по стоящим часам.
         var events = state.Events
+            .Where(matchEvent => matchEvent.Type is not (MatchEventType.MatchPaused or MatchEventType.MatchResumed))
             .Select(matchEvent => new PublicEventDto(
                 matchEvent.Id,
                 matchEvent.Type.ToString(),
                 matchEvent.TeamId is { } teamId ? teams.GetValueOrDefault(teamId)?.Name : null,
                 matchEvent.PlayerId is { } playerId ? playerNames.GetValueOrDefault(playerId) : null,
-                matchEvent.ClientTimestampUtc,
+                matchEvent.OccurredAtUtc,
                 matchEvent.IsVoided,
                 matchEvent.Reason))
             .ToList();
@@ -327,6 +330,8 @@ public sealed class PublicReadService(
             match.PeriodsCount,
             match.ScheduledTimeUtc,
             match.StartedAtUtc,
-            match.PeriodStartedAtUtc);
+            match.PeriodStartedAtUtc,
+            match.PausedAtUtc,
+            match.PeriodPausedMilliseconds);
     }
 }

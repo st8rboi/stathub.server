@@ -31,6 +31,11 @@ public sealed class Match : AggregateRoot
 
     public int CurrentPeriod { get; private set; } // Текущий период; 0 — матч ещё не начат
     public DateTime? PeriodStartedAtUtc { get; private set; } // Когда начался текущий период
+    public DateTime? PausedAtUtc { get; private set; } // Когда остановлена игра; null — часы идут
+    public long PeriodPausedMilliseconds { get; private set; } // Сумма завершённых пауз текущего периода
+    public DateTime? FinishedAtUtc { get; private set; } // Финальный свисток
+
+    public int EventsForReview { get; private set; } // Неотменённые события с пометкой для организатора
 
     private Match()
     {
@@ -97,20 +102,47 @@ public sealed class Match : AggregateRoot
             format);
     }
 
-    public void Start()
+    /// <summary>Применяет событие жизненного цикла; недопустимый переход даёт DomainException.</summary>
+    public void ApplyLifecycle(MatchEvent matchEvent)
+    {
+        var occurredAtUtc = matchEvent.EffectiveTimeUtc;
+
+        switch (matchEvent.Type)
+        {
+            case MatchEventType.MatchStarted:
+                Start(occurredAtUtc);
+                break;
+            case MatchEventType.MatchPaused:
+                Stop(occurredAtUtc);
+                break;
+            case MatchEventType.MatchResumed:
+                Resume(occurredAtUtc);
+                break;
+            case MatchEventType.PeriodStarted:
+                StartNextPeriod(occurredAtUtc);
+                break;
+            case MatchEventType.MatchFinished:
+                Finish(occurredAtUtc);
+                break;
+            default:
+                throw new DomainException($"Событие '{matchEvent.Type}' не меняет статус матча.");
+        }
+    }
+
+    public void Start(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.Scheduled)
             throw new DomainException(
                 "Матч можно начать только из запланированного состояния.");
 
         Status = MatchStatus.InProgress;
-        StartedAtUtc = DateTime.UtcNow;
+        StartedAtUtc = occurredAtUtc;
 
         CurrentPeriod = 1;
-        PeriodStartedAtUtc = StartedAtUtc;
+        PeriodStartedAtUtc = occurredAtUtc;
     }
 
-    public void Stop()
+    public void Stop(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.InProgress)
             throw new DomainException(
@@ -118,22 +150,29 @@ public sealed class Match : AggregateRoot
 
         // Остановка не завершает период: судья может остановить игру внутри периода.
         Status = MatchStatus.Pause;
+        PausedAtUtc = occurredAtUtc;
     }
 
-    public void Resume()
+    public void Resume(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.Pause)
             throw new DomainException(
                 "Матч можно возобновить только из состояния перерыва.");
 
         Status = MatchStatus.InProgress;
+
+        if (PausedAtUtc is { } pausedAtUtc)
+            PeriodPausedMilliseconds += Math.Max(0, (long)(occurredAtUtc - pausedAtUtc).TotalMilliseconds);
+
+        PausedAtUtc = null;
     }
 
     /// <summary>
     /// Переход к следующему периоду. Матч при этом не останавливается: если игра шла,
-    /// она продолжается уже в новом периоде.
+    /// она продолжается уже в новом периоде. Паузы считаются внутри периода, поэтому счётчик
+    /// обнуляется; если матч стоял на паузе, часы нового периода стоят на нуле до продолжения.
     /// </summary>
-    public void StartNextPeriod()
+    public void StartNextPeriod(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.InProgress && Status != MatchStatus.Pause)
             throw new DomainException(
@@ -144,20 +183,23 @@ public sealed class Match : AggregateRoot
                 $"В матче {PeriodsCount} период(ов), период {CurrentPeriod} — последний.");
 
         CurrentPeriod++;
-        PeriodStartedAtUtc = DateTime.UtcNow;
+        PeriodStartedAtUtc = occurredAtUtc;
+        PeriodPausedMilliseconds = 0;
+        PausedAtUtc = Status == MatchStatus.Pause ? occurredAtUtc : null;
     }
 
     /// <summary>
     /// Завершение матча. Судья завершает матч сам, поэтому неполнота периодов не блокирует
     /// завершение — правила матча намеренно минимальны (см. AGENTS.md, «Особенности домена»).
     /// </summary>
-    public void Finish()
+    public void Finish(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.InProgress)
             throw new DomainException(
                 "Матч можно закончить только из состояния в процессе.");
 
         Status = MatchStatus.Finished;
+        FinishedAtUtc = occurredAtUtc;
     }
 
     /// <summary>
@@ -194,11 +236,15 @@ public sealed class Match : AggregateRoot
 
         var homeScore = 0;
         var awayScore = 0;
+        var eventsForReview = 0;
 
         foreach (var matchEvent in events)
         {
             if (voidedEventIds.Contains(matchEvent.Id))
                 continue;
+
+            if (matchEvent.ReviewNote is not null)
+                eventsForReview++;
 
             switch (matchEvent.Type)
             {
@@ -219,6 +265,14 @@ public sealed class Match : AggregateRoot
 
         HomeScore = homeScore;
         AwayScore = awayScore;
+        EventsForReview = eventsForReview;
+    }
+
+    /// <summary>Может ли новое событие войти в протокол: матч открыт, команда играет в этом матче.</summary>
+    public void EnsureCanAccept(MatchEvent matchEvent)
+    {
+        EnsureEventsCanBeChanged();
+        EnsureEventBelongsToMatch(matchEvent);
     }
 
     private void EnsureEventBelongsToMatch(MatchEvent matchEvent)

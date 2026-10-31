@@ -101,64 +101,6 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
 
     #endregion
 
-    #region Управление матчем
-    public async Task StartMatchAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var match = await GetOrThrowAsync(id, cancellationToken);
-
-        match.Start();
-
-        await repository.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task StopMatchAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var match = await GetOrThrowAsync(id, cancellationToken);
-
-        match.Stop();
-
-        await repository.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task ResumeMatchAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var match = await GetOrThrowAsync(id, cancellationToken);
-
-        match.Resume();
-
-        await repository.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task StartNextPeriodAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var match = await GetOrThrowAsync(id, cancellationToken);
-
-        match.StartNextPeriod();
-
-        await repository.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task FinishMatchAsync(
-        Guid id,
-        CancellationToken cancellationToken = default)
-    {
-        var match = await GetOrThrowAsync(id, cancellationToken);
-
-        match.Finish();
-
-        await repository.SaveChangesAsync(cancellationToken);
-    }
-    #endregion
-
-
     #region Вспомогательные методы
     private async Task<Match> GetOrThrowAsync(Guid id, CancellationToken cancellationToken) =>
         await repository.GetByIdAsync(id, cancellationToken)

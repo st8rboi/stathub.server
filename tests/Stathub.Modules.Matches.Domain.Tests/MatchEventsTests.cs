@@ -91,8 +91,8 @@ public sealed class MatchEventsTests
     public void EnsureEventsCanBeChanged_ThrowsAfterFinish()
     {
         var match = CreateMatch();
-        match.Start();
-        match.Finish();
+        match.Start(DateTime.UtcNow);
+        match.Finish(DateTime.UtcNow);
 
         Assert.Throws<DomainException>(match.EnsureEventsCanBeChanged);
     }
@@ -101,9 +101,72 @@ public sealed class MatchEventsTests
     public void EnsureEventsCanBeChanged_AllowsRunningMatch()
     {
         var match = CreateMatch();
-        match.Start();
+        match.Start(DateTime.UtcNow);
 
         match.EnsureEventsCanBeChanged();
+    }
+
+    [Fact]
+    public void Lifecycle_TimesComeFromEvents_NotFromServerArrival()
+    {
+        var match = CreateMatch();
+        var kickOff = DateTime.UtcNow.AddHours(-2);
+
+        match.Start(kickOff);
+        match.Stop(kickOff.AddMinutes(10));
+        match.Resume(kickOff.AddMinutes(12));
+        match.Finish(kickOff.AddMinutes(90));
+
+        Assert.Equal(kickOff, match.StartedAtUtc);
+        Assert.Equal(kickOff.AddMinutes(90), match.FinishedAtUtc);
+        Assert.Equal(120_000, match.PeriodPausedMilliseconds);
+    }
+
+    [Fact]
+    public void Resume_WithClockMovedBack_DoesNotMakePauseNegative()
+    {
+        var match = CreateMatch();
+        var now = DateTime.UtcNow;
+
+        match.Start(now);
+        match.Stop(now);
+        match.Resume(now.AddMinutes(-5));
+
+        Assert.Equal(0, match.PeriodPausedMilliseconds);
+    }
+
+    [Fact]
+    public void StartNextPeriod_DuringPause_KeepsClockStoppedAtZero()
+    {
+        var match = CreateMatch();
+        var now = DateTime.UtcNow;
+
+        match.Start(now);
+        match.Stop(now.AddMinutes(45));
+        match.StartNextPeriod(now.AddMinutes(60));
+
+        Assert.Equal(MatchStatus.Pause, match.Status);
+        Assert.Equal(now.AddMinutes(60), match.PausedAtUtc);
+        Assert.Equal(now.AddMinutes(60), match.PeriodStartedAtUtc);
+    }
+
+    [Fact]
+    public void ApplyLifecycle_InvalidTransition_Throws()
+    {
+        var match = CreateMatch();
+        var finish = MatchEvent.Create(
+            Guid.NewGuid(),
+            match.Id,
+            MatchEventType.MatchFinished,
+            teamId: null,
+            playerId: null,
+            relatedPlayerId: null,
+            targetEventId: null,
+            reason: null,
+            DateTime.UtcNow,
+            sequenceNumber: 1);
+
+        Assert.Throws<DomainException>(() => match.ApplyLifecycle(finish));
     }
 
     [Fact]

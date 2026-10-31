@@ -138,6 +138,8 @@ public sealed class TestOrganizer(StathubApiFactory factory, HttpClient client)
 
     public HttpClient Client { get; } = client;
 
+    public Guid LeagueId => _leagueId;
+
     public async Task<Guid> CreateTournamentAsync()
     {
         var slug = $"league-{Guid.NewGuid():N}"[..20];

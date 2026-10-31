@@ -22,6 +22,8 @@ public sealed class AuthService(
 {
     public const int PasswordMinLength = 8;
 
+    private static readonly TimeSpan RefreshReuseWindow = TimeSpan.FromMinutes(2);
+
     public async Task<AuthResultDto> LoginAsync(
         string login,
         string password,
@@ -69,7 +71,9 @@ public sealed class AuthService(
         var stored = await refreshTokens.GetByHashAsync(HashToken(refreshToken), cancellationToken)
             ?? throw new DomainException("Сессия не найдена, войдите заново.");
 
-        if (!stored.IsActive(DateTime.UtcNow))
+        var nowUtc = DateTime.UtcNow;
+
+        if (!stored.IsActive(nowUtc) && !stored.CanBeUsedAfterRotation(nowUtc, RefreshReuseWindow))
             throw new DomainException("Сессия истекла, войдите заново.");
 
         var user = await users.GetByIdAsync(stored.UserId, cancellationToken)
@@ -85,7 +89,7 @@ public sealed class AuthService(
         if (membership.Tenant.Status != TenantStatus.Active)
             throw new DomainException("Организация заблокирована.");
 
-        stored.Revoke();
+        stored.Rotate(nowUtc);
         var issued = tokenIssuer.Issue(user, membership.Tenant, membership.Role);
 
         await StoreRefreshTokenAsync(user.Id, membership.Tenant.Id, issued, cancellationToken);
@@ -100,7 +104,8 @@ public sealed class AuthService(
             return;
 
         var stored = await refreshTokens.GetByHashAsync(HashToken(refreshToken), cancellationToken);
-        if (stored is null || !stored.IsActive(DateTime.UtcNow))
+        // Заменённый токен тоже: выход закрывает ему окно повторного использования.
+        if (stored is null)
             return;
 
         stored.Revoke();

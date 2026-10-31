@@ -22,6 +22,9 @@ public sealed class RefreshToken : AggregateRoot
 
     public DateTime? RevokedAtUtc { get; private set; }
 
+    /// <summary>Токен заменён новым при обновлении сессии; отзыв по другой причине это поле снимает.</summary>
+    public DateTime? RotatedAtUtc { get; private set; }
+
     public string? Device { get; private set; }
 
     private RefreshToken()
@@ -61,5 +64,19 @@ public sealed class RefreshToken : AggregateRoot
     public void Revoke()
     {
         RevokedAtUtc ??= DateTime.UtcNow;
+        RotatedAtUtc = null;
     }
+
+    public void Rotate(DateTime nowUtc)
+    {
+        RevokedAtUtc ??= nowUtc;
+        RotatedAtUtc ??= nowUtc;
+    }
+
+    /// <summary>
+    /// На плохой связи ответ с новым токеном может потеряться, и устройство повторит запрос
+    /// со старым. Короткое окно после ротации не даёт из-за этого разлогинить судью посреди матча.
+    /// </summary>
+    public bool CanBeUsedAfterRotation(DateTime nowUtc, TimeSpan window) =>
+        RotatedAtUtc is { } rotatedAtUtc && ExpiresAtUtc > nowUtc && nowUtc - rotatedAtUtc <= window;
 }

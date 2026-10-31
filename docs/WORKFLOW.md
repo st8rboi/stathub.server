@@ -235,6 +235,7 @@ DELETE FROM matches.matches WHERE "StageId" IN (
 | `NU1900` при restore | нет сети или прокси с подменой сертификата, NuGet-audit не может скачать индекс уязвимостей | уже исправлено: `<NuGetAudit>false</NuGetAudit>` в `Directory.Build.props` (см. раздел 1) |
 | 500 + лавина `Cannot open log for source '.NET Runtime'` | провайдер EventLog не может писать в журнал Windows, и любой `LogWarning` роняет запрос | уже исправлено: `Logging:EventLog:LogLevel:Default=None` в `appsettings.json` |
 | `Failed to determine the https port for redirect` | `UseHttpsRedirection()` в Development, где слушается http | уже исправлено: редирект только вне Development |
+| `dotnet test` → `TESTRUNABORT`, `Win32Exception (5)` в `OpenProcess` | на папке `stathub` стоит обязательная метка целостности: `testhost.exe` из `bin` запускается с пониженными правами и не может открыть родительский процесс | `dotnet test Stathub.slnx -m:1 -- "RunConfiguration.DotNetHostPath=C:\Program Files\dotnet\dotnet.exe"` |
 
 ---
 

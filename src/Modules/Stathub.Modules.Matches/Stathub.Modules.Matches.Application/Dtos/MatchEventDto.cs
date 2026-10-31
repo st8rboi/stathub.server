@@ -17,6 +17,8 @@ public sealed record MatchEventDto(
     Guid? TargetEventId,
     string? Reason,
     DateTime ClientTimestampUtc,
+    DateTime OccurredAtUtc,
+    string? ReviewNote,
     long SequenceNumber,
     DateTime CreatedAtUtc,
     bool IsVoided)
@@ -31,6 +33,8 @@ public sealed record MatchEventDto(
         matchEvent.TargetEventId,
         matchEvent.Reason,
         matchEvent.ClientTimestampUtc,
+        matchEvent.EffectiveTimeUtc,
+        matchEvent.ReviewNote,
         matchEvent.SequenceNumber,
         matchEvent.CreatedAtUtc,
         voidedEventIds.Contains(matchEvent.Id));

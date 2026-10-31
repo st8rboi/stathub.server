@@ -40,8 +40,14 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<int>("CurrentPeriod")
                         .HasColumnType("integer");
 
+                    b.Property<int>("EventsForReview")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("ExtraTimeEnabled")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("HomeScore")
                         .HasColumnType("integer");
@@ -49,11 +55,17 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<Guid>("HomeTeamId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("PausedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("PenaltyShootoutEnabled")
                         .HasColumnType("boolean");
 
                     b.Property<int>("PeriodDurationMinutes")
                         .HasColumnType("integer");
+
+                    b.Property<long>("PeriodPausedMilliseconds")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTime?>("PeriodStartedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -97,6 +109,9 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<Guid>("MatchId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("PlayerId")
                         .HasColumnType("uuid");
 
@@ -106,6 +121,10 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
 
                     b.Property<Guid?>("RelatedPlayerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<long>("SequenceNumber")
                         .HasColumnType("bigint");

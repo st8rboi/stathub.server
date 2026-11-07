@@ -124,6 +124,10 @@ jobs:
           set -euo pipefail
           cd ~/stathub
           chmod +x backup.sh
+          DOMAIN=xn--80aad5dfbv.xn--p1ai   # статхаб.рф
+
+          # Без файла сертификата nginx с ssl-конфигом не стартует: при первом деплое кладём временный.
+          bash ssl.sh ensure
 
           # compose использует stathub-api:latest (API_IMAGE в .env); тег с SHA остаётся для отката.
           docker tag "$IMAGE" stathub-api:latest
@@ -133,8 +137,11 @@ jobs:
 
           # Ждём, пока API поднимется (миграции при старте). 502/503/504/000 = API ещё не отвечает,
           # любой другой код (в т.ч. 404 на несуществующий путь) = Kestrel работает.
+          # По HTTP nginx отвечает только редиректом, поэтому идём на HTTPS локально
+          # (-k: при первом деплое сертификат ещё временный).
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/ || true)
+            code=$(curl -sk -o /dev/null -w '%{http_code}' \
+              --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/" || true)
             case "$code" in
               502|503|504|000) sleep 2 ;;
               *) echo "API отвечает (HTTP $code)"; break ;;
@@ -151,4 +158,8 @@ jobs:
             | grep -v '^latest$' | tail -n +6 \
             | xargs -r -I{} docker rmi "stathub-api:{}"
           docker image prune -f
+
+          # Если сертификат ещё временный — выпускаем настоящий (дальше его продлевает сервис certbot).
+          # Ошибка здесь валит деплой намеренно: с временным сертификатом браузеры показывают предупреждение.
+          bash ssl.sh issue
           EOF

@@ -1,3 +1,4 @@
 .env
 sites/
 backups/
+certbot/

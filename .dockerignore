@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/*.user
+.git/
+.tmp-cleanup/
+docs/
+deploy/
+tests/
+
+# Артефакты локальной сборки и загруженные в dev логотипы не должны попасть в образ.
+src/Stathub.WebApi/output_directory/
+src/Stathub.WebApi/wwwroot/uploads/
+
+# Dev-настройки (в т.ч. dev-ключ JWT) в прод-образ не кладём.
+**/appsettings.Development.json

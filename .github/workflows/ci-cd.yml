@@ -1,0 +1,130 @@
+# Сборка и тесты на каждый push в dev и PR в main; после merge в main — деплой API на VPS.
+# Секреты репозитория (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST         — IP сервера
+#   DEPLOY_USER         — пользователь (shadmin)
+#   DEPLOY_SSH_KEY      — приватный ключ, выделенный для CI
+#   DEPLOY_KNOWN_HOSTS  — вывод `ssh-keyscan -t ed25519 <IP>`
+# Подробно: deploy/README.md, раздел «CI/CD».
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # PR-сборки можно отменять, деплой — нет.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: stathub
+          POSTGRES_PASSWORD: stathub
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stathub"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Интеграционные тесты сами создают и пересоздают базу stathub_test (StathubApiFactory).
+      STATHUB_TEST_POSTGRES: Host=localhost;Port=5432;Username=stathub;Password=stathub;Database=postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Stathub.slnx
+
+      - name: Build
+        run: dotnet build Stathub.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Stathub.slnx -c Release --no-build
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE: stathub-api:${{ github.sha }}
+      TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "$IMAGE" .
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # .env, sites/ и backups/ в репозитории отсутствуют, поэтому rsync их не трогает (без --delete).
+      - name: Sync deploy configs
+        run: |
+          rsync -rtz --chmod=D755,F644 \
+            --exclude '.gitignore' --exclude '.gitattributes' --exclude 'README.md' \
+            deploy/ "$TARGET:stathub/"
+
+      # Без registry: образ уходит на сервер напрямую по SSH (~70–100 МБ в gzip).
+      - name: Upload image
+        run: docker save "$IMAGE" | gzip | ssh "$TARGET" docker load
+
+      - name: Restart services
+        run: |
+          ssh "$TARGET" IMAGE="$IMAGE" bash -s <<'EOF'
+          set -euo pipefail
+          cd ~/stathub
+          chmod +x backup.sh
+
+          # compose использует stathub-api:latest (API_IMAGE в .env); тег с SHA остаётся для отката.
+          docker tag "$IMAGE" stathub-api:latest
+          docker compose up -d --remove-orphans
+          # Изменения в nginx/*.conf подхватываются без пересоздания контейнера.
+          docker compose exec -T nginx nginx -s reload
+
+          # Ждём, пока API поднимется (миграции при старте). 502/503/504/000 = API ещё не отвечает,
+          # любой другой код (в т.ч. 404 на несуществующий путь) = Kestrel работает.
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/ || true)
+            case "$code" in
+              502|503|504|000) sleep 2 ;;
+              *) echo "API отвечает (HTTP $code)"; break ;;
+            esac
+            if [ "$i" -eq 30 ]; then
+              echo "API не поднялся за 60 секунд"
+              docker compose logs --tail=100 api
+              exit 1
+            fi
+          done
+
+          # Храним 5 последних сборок для отката, остальные удаляем (диск всего 20 ГБ).
+          docker images stathub-api --format '{{.Tag}}' \
+            | grep -v '^latest$' | tail -n +6 \
+            | xargs -r -I{} docker rmi "stathub-api:{}"
+          docker image prune -f
+          EOF

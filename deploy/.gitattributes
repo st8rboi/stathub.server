@@ -1,0 +1,2 @@
+# Файлы деплоя исполняются на Linux: CRLF ломает bash-скрипты ("bad interpreter").
+* text=auto eol=lf

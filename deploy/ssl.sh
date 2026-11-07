@@ -9,7 +9,9 @@
 #
 # Сертификаты:
 #   stathub — статхаб.рф, www, admin (обычный, 90 дней; DNS доменов должен указывать на этот сервер)
-#   ip      — 91.206.92.250 (профиль shortlived, ~6 дней; нужен certbot >= 5.4)
+#   ip      — 91.206.92.250 (профиль shortlived, ~6 дней; нужен certbot >= 5.4). ОТКЛЮЧЁН: HTTPS по IP
+#             на 443 делает сервер похожим на VPN/прокси, и ТСПУ начинает резать TLS. Код оставлен —
+#             чтобы включить, раскомментировать строку [ip] в CERTS и вернуть server-блок в nginx.
 #
 # Продление — сервис certbot в docker-compose.yml (раз в 12 ч), nginx перечитывает сертификаты раз в 6 ч.
 # Файлы — в ./certbot/conf (в git не хранятся). Certbot пишет их от root с правами 700 на live/ и archive/,
@@ -23,7 +25,7 @@ SERVER_IP=91.206.92.250
 # Имя сертификата → аргументы certbot.
 declare -A CERTS=(
     [stathub]="-d xn--80aad5dfbv.xn--p1ai -d www.xn--80aad5dfbv.xn--p1ai -d admin.xn--80aad5dfbv.xn--p1ai"
-    [ip]="--ip-address $SERVER_IP --preferred-profile shortlived"
+    # [ip]="--ip-address $SERVER_IP --preferred-profile shortlived"
 )
 
 # Когда продлевать (renew_before_expiry в renewal/<имя>.conf). По умолчанию certbot продлевает за 30 дней —

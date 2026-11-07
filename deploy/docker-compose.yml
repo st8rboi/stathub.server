@@ -34,7 +34,11 @@ services:
     shm_size: 128mb
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Порт наружу НЕ публикуется: Docker обходит ufw, а API ходит в БД по внутренней сети.
+    # Порт открыт ТОЛЬКО на localhost сервера — для подключения через SSH-туннель (DBeaver и т.п.).
+    # Никогда не писать "5432:5432" без 127.0.0.1: Docker обходит ufw, и БД станет видна из интернета.
+    # API ходит в БД по внутренней сети compose, этот порт ему не нужен.
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U stathub -d stathub"]
       interval: 10s

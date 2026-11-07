@@ -54,6 +54,28 @@ internal sealed class PlayerRepository(PlayersDbContext dbContext) : IPlayerRepo
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Player>> ListRecentAsync(
+        int limit,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Players
+            .AsNoTracking()
+            .OrderByDescending(p => p.CreatedAtUtc)
+            .ThenBy(p => p.FullName)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Player>> GetByIdsAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0) return [];
+
+        return await dbContext.Players
+            .AsNoTracking()
+            .Where(player => ids.Contains(player.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(Player player, CancellationToken cancellationToken = default) =>
         await dbContext.Players.AddAsync(player, cancellationToken);
 

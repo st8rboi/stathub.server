@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Мета-проект модуля: кода не содержит. -->
+  <ItemGroup>
+    <Compile Remove="Stathub.Modules.Finance.Domain/**/*.cs" />
+    <Compile Remove="Stathub.Modules.Finance.Application/**/*.cs" />
+    <Compile Remove="Stathub.Modules.Finance.Infrastructure/**/*.cs" />
+    <Compile Remove="bin/**/*.cs" />
+    <Compile Remove="obj/**/*.cs" />
+  </ItemGroup>
+
+</Project>

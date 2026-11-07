@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stathub.Modules.Rosters.Domain\Stathub.Modules.Rosters.Domain.csproj" />
+    <ProjectReference Include="..\Stathub.Modules.Rosters.Application\Stathub.Modules.Rosters.Application.csproj" />
+    <ProjectReference Include="..\..\Stathub.Modules.Leagues\Stathub.Modules.Leagues.Application\Stathub.Modules.Leagues.Application.csproj" />
+    <ProjectReference Include="..\..\Stathub.Modules.Players\Stathub.Modules.Players.Application\Stathub.Modules.Players.Application.csproj" />
+    <ProjectReference Include="..\..\Stathub.Modules.Teams\Stathub.Modules.Teams.Application\Stathub.Modules.Teams.Application.csproj" />
+  </ItemGroup>
+
+</Project>

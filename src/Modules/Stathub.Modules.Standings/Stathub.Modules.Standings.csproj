@@ -1,9 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Stathub.Modules.Standings.Domain/**/*.cs" />
+    <Compile Remove="Stathub.Modules.Standings.Application/**/*.cs" />
+    <Compile Remove="Stathub.Modules.Standings.Infrastructure/**/*.cs" />
+  </ItemGroup>
 
 </Project>

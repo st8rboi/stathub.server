@@ -16,10 +16,20 @@ public static class MatchesModule
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
 
-        services.AddDbContext<MatchesDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<MatchesDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    "__EFMigrationsHistory_Matches",
+                    "public")));
+                    
         services.AddScoped<IMatchRepository, MatchRepository>();
+        services.AddScoped<IMatchEventRepository, MatchEventRepository>();
         services.AddScoped<IMatchFormatProvider, MatchFormatProvider>();
+        services.AddScoped<IMatchResultsReader, MatchResultsReader>();
+        services.AddScoped<ITournamentPlayerEventReader, TournamentPlayerEventReader>();
         services.AddScoped<MatchService>();
+        services.AddScoped<MatchEventService>();
         return services;
     }
 }

@@ -14,6 +14,10 @@ public sealed class League : AggregateRoot
     public string? Region { get; private set; }
     public LeagueDataSource DataSource { get; private set; }
     public LeagueStatus Status { get; private set; }
+
+    /// <summary>Путь к загруженному логотипу лиги; в БД — только путь, файл лежит в хранилище.</summary>
+    public string? LogoUrl { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     private League()
@@ -101,6 +105,17 @@ public sealed class League : AggregateRoot
     {
         if (Status == LeagueStatus.Archived)
             throw new ConflictException("Нельзя добавить турнир в архивированную лигу.");
+    }
+
+    /// <summary>Устанавливает или сбрасывает логотип лиги (<paramref name="logoUrl"/> = null — удалить).</summary>
+    public void SetLogo(string? logoUrl)
+    {
+        var normalized = NormalizeOptional(logoUrl);
+
+        if (normalized is { Length: > 500 })
+            throw new DomainException("Путь к логотипу не может быть длиннее 500 символов.");
+
+        LogoUrl = normalized;
     }
 
     private static string? NormalizeOptional(string? value) =>

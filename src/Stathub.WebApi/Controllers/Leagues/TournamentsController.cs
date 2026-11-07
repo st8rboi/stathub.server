@@ -1,12 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stathub.Modules.Leagues.Application;
 using Stathub.Modules.Leagues.Application.Dtos;
 using Stathub.WebApi.Contracts.Leagues;
+using Stathub.WebApi.Infrastructure.Auth;
 
 namespace Stathub.WebApi.Controllers.Leagues;
 
 [ApiController]
 [Route("leagues/{leagueId:guid}/tournaments")]
+[Authorize(Policy = AuthPolicies.Organizer)]
+[ServiceFilter(typeof(OwnedLeagueFilter))]
 public sealed class TournamentsController(TournamentService tournamentService) : ControllerBase
 {
     [HttpPost]

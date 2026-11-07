@@ -16,4 +16,49 @@
     <Project Path="src/Modules/Stathub.Modules.Players/Stathub.Modules.Players.Application/Stathub.Modules.Players.Application.csproj" />
     <Project Path="src/Modules/Stathub.Modules.Players/Stathub.Modules.Players.Infrastructure/Stathub.Modules.Players.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Teams/">
+    <Project Path="src/Modules/Stathub.Modules.Teams/Stathub.Modules.Teams.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Teams/Stathub.Modules.Teams.Domain/Stathub.Modules.Teams.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Teams/Stathub.Modules.Teams.Application/Stathub.Modules.Teams.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Teams/Stathub.Modules.Teams.Infrastructure/Stathub.Modules.Teams.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Rosters/">
+    <Project Path="src/Modules/Stathub.Modules.Rosters/Stathub.Modules.Rosters.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Rosters/Stathub.Modules.Rosters.Domain/Stathub.Modules.Rosters.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Rosters/Stathub.Modules.Rosters.Application/Stathub.Modules.Rosters.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Rosters/Stathub.Modules.Rosters.Infrastructure/Stathub.Modules.Rosters.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Standings/">
+    <Project Path="src/Modules/Stathub.Modules.Standings/Stathub.Modules.Standings.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Standings/Stathub.Modules.Standings.Domain/Stathub.Modules.Standings.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Standings/Stathub.Modules.Standings.Application/Stathub.Modules.Standings.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Standings/Stathub.Modules.Standings.Infrastructure/Stathub.Modules.Standings.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Statistics/">
+    <Project Path="src/Modules/Stathub.Modules.Statistics/Stathub.Modules.Statistics.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Statistics/Stathub.Modules.Statistics.Domain/Stathub.Modules.Statistics.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Statistics/Stathub.Modules.Statistics.Application/Stathub.Modules.Statistics.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Statistics/Stathub.Modules.Statistics.Infrastructure/Stathub.Modules.Statistics.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Identity/">
+    <Project Path="src/Modules/Stathub.Modules.Identity/Stathub.Modules.Identity.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Identity/Stathub.Modules.Identity.Domain/Stathub.Modules.Identity.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Identity/Stathub.Modules.Identity.Application/Stathub.Modules.Identity.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Identity/Stathub.Modules.Identity.Infrastructure/Stathub.Modules.Identity.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Finance/">
+    <Project Path="src/Modules/Stathub.Modules.Finance/Stathub.Modules.Finance.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Finance/Stathub.Modules.Finance.Domain/Stathub.Modules.Finance.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Finance/Stathub.Modules.Finance.Application/Stathub.Modules.Finance.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Finance/Stathub.Modules.Finance.Infrastructure/Stathub.Modules.Finance.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Stathub.Modules.Discipline/">
+    <Project Path="src/Modules/Stathub.Modules.Discipline/Stathub.Modules.Discipline.Domain/Stathub.Modules.Discipline.Domain.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Discipline/Stathub.Modules.Discipline.Application/Stathub.Modules.Discipline.Application.csproj" />
+    <Project Path="src/Modules/Stathub.Modules.Discipline/Stathub.Modules.Discipline.Infrastructure/Stathub.Modules.Discipline.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Stathub.Modules.Matches.Domain.Tests/Stathub.Modules.Matches.Domain.Tests.csproj" />
+    <Project Path="tests/Stathub.WebApi.IntegrationTests/Stathub.WebApi.IntegrationTests.csproj" />
+  </Folder>
 </Solution>

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Stathub.Modules.Players.Application;
 using Stathub.Modules.Players.Application.Interfaces;
 using Stathub.Modules.Players.Infrastructure.Persistence;
+using Stathub.Modules.Players.Infrastructure.Services;
 
 namespace Stathub.Modules.Players.Infrastructure;
 
@@ -14,8 +15,14 @@ public static class PlayersModule
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
 
-        services.AddDbContext<PlayersDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<PlayersDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    "__EFMigrationsHistory_Players",
+                    "public")));
         services.AddScoped<IPlayerRepository, PlayerRepository>();
+        services.AddScoped<IPlayerReader, PlayerReader>();
         services.AddScoped<PlayerService>();
 
         return services;

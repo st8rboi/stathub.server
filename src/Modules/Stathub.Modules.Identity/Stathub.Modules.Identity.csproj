@@ -1,9 +1,18 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <!-- Мета-проект модуля: сам кода не содержит, иначе подпапки скомпилируются дважды. -->
+  <ItemGroup>
+    <Compile Remove="Stathub.Modules.Identity.Domain/**/*.cs" />
+    <Compile Remove="Stathub.Modules.Identity.Application/**/*.cs" />
+    <Compile Remove="Stathub.Modules.Identity.Infrastructure/**/*.cs" />
+    <Compile Remove="bin/**/*.cs" />
+    <Compile Remove="obj/**/*.cs" />
+  </ItemGroup>
 
 </Project>

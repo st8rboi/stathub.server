@@ -8,6 +8,7 @@ namespace Stathub.Modules.Matches.Domain.Entities;
 public sealed class Match : AggregateRoot
 {
     public Guid StageId { get; private set; } // Стадия (этап) турнира
+    public Guid TournamentId { get; private set; } // Турнир (сезон) этапа — контекст заявок и составов
     public Guid HomeTeamId { get; private set; } // Первая команда
     public Guid AwayTeamId { get; private set; } // Вторая команда
 
@@ -30,6 +31,11 @@ public sealed class Match : AggregateRoot
 
     public int CurrentPeriod { get; private set; } // Текущий период; 0 — матч ещё не начат
     public DateTime? PeriodStartedAtUtc { get; private set; } // Когда начался текущий период
+    public DateTime? PausedAtUtc { get; private set; } // Когда остановлена игра; null — часы идут
+    public long PeriodPausedMilliseconds { get; private set; } // Сумма завершённых пауз текущего периода
+    public DateTime? FinishedAtUtc { get; private set; } // Финальный свисток
+
+    public int EventsForReview { get; private set; } // Неотменённые события с пометкой для организатора
 
     private Match()
     {
@@ -38,6 +44,7 @@ public sealed class Match : AggregateRoot
     private Match(
         Guid id,
         Guid stageId,
+        Guid tournamentId,
         Guid homeTeamId,
         Guid awayTeamId,
         DateTime scheduledTimeUtc,
@@ -45,6 +52,7 @@ public sealed class Match : AggregateRoot
     {
         Id = id;
         StageId = stageId;
+        TournamentId = tournamentId;
         HomeTeamId = homeTeamId;
         AwayTeamId = awayTeamId;
         ScheduledTimeUtc = scheduledTimeUtc;
@@ -65,6 +73,7 @@ public sealed class Match : AggregateRoot
 
     public static Match Create(
         Guid stageId,
+        Guid tournamentId,
         Guid homeTeamId,
         Guid awayTeamId,
         DateTime scheduledTimeUtc,
@@ -72,6 +81,8 @@ public sealed class Match : AggregateRoot
     {
         if (stageId == Guid.Empty)
             throw new DomainException("StageId обязательное поле.");
+        if (tournamentId == Guid.Empty)
+            throw new DomainException("TournamentId обязательное поле.");
         if (homeTeamId == Guid.Empty)
             throw new DomainException("HomeTeamId обязательное поле.");
         if (awayTeamId == Guid.Empty)
@@ -84,26 +95,54 @@ public sealed class Match : AggregateRoot
         return new Match(
             Guid.NewGuid(),
             stageId,
+            tournamentId,
             homeTeamId,
             awayTeamId,
             scheduledTimeUtc,
             format);
     }
 
-    public void Start()
+    /// <summary>Применяет событие жизненного цикла; недопустимый переход даёт DomainException.</summary>
+    public void ApplyLifecycle(MatchEvent matchEvent)
+    {
+        var occurredAtUtc = matchEvent.EffectiveTimeUtc;
+
+        switch (matchEvent.Type)
+        {
+            case MatchEventType.MatchStarted:
+                Start(occurredAtUtc);
+                break;
+            case MatchEventType.MatchPaused:
+                Stop(occurredAtUtc);
+                break;
+            case MatchEventType.MatchResumed:
+                Resume(occurredAtUtc);
+                break;
+            case MatchEventType.PeriodStarted:
+                StartNextPeriod(occurredAtUtc);
+                break;
+            case MatchEventType.MatchFinished:
+                Finish(occurredAtUtc);
+                break;
+            default:
+                throw new DomainException($"Событие '{matchEvent.Type}' не меняет статус матча.");
+        }
+    }
+
+    public void Start(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.Scheduled)
             throw new DomainException(
                 "Матч можно начать только из запланированного состояния.");
 
         Status = MatchStatus.InProgress;
-        StartedAtUtc = DateTime.UtcNow;
+        StartedAtUtc = occurredAtUtc;
 
         CurrentPeriod = 1;
-        PeriodStartedAtUtc = StartedAtUtc;
+        PeriodStartedAtUtc = occurredAtUtc;
     }
 
-    public void Stop()
+    public void Stop(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.InProgress)
             throw new DomainException(
@@ -111,22 +150,29 @@ public sealed class Match : AggregateRoot
 
         // Остановка не завершает период: судья может остановить игру внутри периода.
         Status = MatchStatus.Pause;
+        PausedAtUtc = occurredAtUtc;
     }
 
-    public void Resume()
+    public void Resume(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.Pause)
             throw new DomainException(
                 "Матч можно возобновить только из состояния перерыва.");
 
         Status = MatchStatus.InProgress;
+
+        if (PausedAtUtc is { } pausedAtUtc)
+            PeriodPausedMilliseconds += Math.Max(0, (long)(occurredAtUtc - pausedAtUtc).TotalMilliseconds);
+
+        PausedAtUtc = null;
     }
 
     /// <summary>
     /// Переход к следующему периоду. Матч при этом не останавливается: если игра шла,
-    /// она продолжается уже в новом периоде.
+    /// она продолжается уже в новом периоде. Паузы считаются внутри периода, поэтому счётчик
+    /// обнуляется; если матч стоял на паузе, часы нового периода стоят на нуле до продолжения.
     /// </summary>
-    public void StartNextPeriod()
+    public void StartNextPeriod(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.InProgress && Status != MatchStatus.Pause)
             throw new DomainException(
@@ -137,19 +183,104 @@ public sealed class Match : AggregateRoot
                 $"В матче {PeriodsCount} период(ов), период {CurrentPeriod} — последний.");
 
         CurrentPeriod++;
-        PeriodStartedAtUtc = DateTime.UtcNow;
+        PeriodStartedAtUtc = occurredAtUtc;
+        PeriodPausedMilliseconds = 0;
+        PausedAtUtc = Status == MatchStatus.Pause ? occurredAtUtc : null;
     }
 
     /// <summary>
     /// Завершение матча. Судья завершает матч сам, поэтому неполнота периодов не блокирует
     /// завершение — правила матча намеренно минимальны (см. AGENTS.md, «Особенности домена»).
     /// </summary>
-    public void Finish()
+    public void Finish(DateTime occurredAtUtc)
     {
         if (Status != MatchStatus.InProgress)
             throw new DomainException(
                 "Матч можно закончить только из состояния в процессе.");
 
         Status = MatchStatus.Finished;
+        FinishedAtUtc = occurredAtUtc;
+    }
+
+    /// <summary>
+    /// Проверяет, что протокол ещё можно менять. По документации после финального свистка
+    /// события правит только организатор, но модуля Identity пока нет — поэтому после
+    /// завершения протокол закрыт для всех.
+    /// </summary>
+    public void EnsureEventsCanBeChanged()
+    {
+        if (Status is MatchStatus.Finished or MatchStatus.Cancelled)
+            throw new DomainException(
+                "Матч завершён: протокол можно менять только до финального свистка.");
+    }
+
+    /// <summary>
+    /// Пересчитывает проекцию счёта из протокола: источник истины — лог событий,
+    /// а <see cref="HomeScore"/>/<see cref="AwayScore"/> хранят готовый результат, чтобы не
+    /// суммировать события на каждый запрос (см. документацию, раздел 9).
+    /// Отменённые события (на которые ссылается активный <c>EventVoided</c>) не учитываются,
+    /// а автогол засчитывается сопернику команды, в чьи ворота он забит.
+    /// </summary>
+    public void RebuildScoreProjection(IReadOnlyCollection<MatchEvent> events)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+
+        var voidedEventIds = new HashSet<Guid>();
+        foreach (var matchEvent in events)
+        {
+            EnsureEventBelongsToMatch(matchEvent);
+
+            if (matchEvent.Type == MatchEventType.EventVoided && matchEvent.TargetEventId is { } targetId)
+                voidedEventIds.Add(targetId);
+        }
+
+        var homeScore = 0;
+        var awayScore = 0;
+        var eventsForReview = 0;
+
+        foreach (var matchEvent in events)
+        {
+            if (voidedEventIds.Contains(matchEvent.Id))
+                continue;
+
+            if (matchEvent.ReviewNote is not null)
+                eventsForReview++;
+
+            switch (matchEvent.Type)
+            {
+                case MatchEventType.Goal when matchEvent.TeamId == HomeTeamId:
+                    homeScore++;
+                    break;
+                case MatchEventType.Goal when matchEvent.TeamId == AwayTeamId:
+                    awayScore++;
+                    break;
+                case MatchEventType.OwnGoal when matchEvent.TeamId == HomeTeamId:
+                    awayScore++;
+                    break;
+                case MatchEventType.OwnGoal when matchEvent.TeamId == AwayTeamId:
+                    homeScore++;
+                    break;
+            }
+        }
+
+        HomeScore = homeScore;
+        AwayScore = awayScore;
+        EventsForReview = eventsForReview;
+    }
+
+    /// <summary>Может ли новое событие войти в протокол: матч открыт, команда играет в этом матче.</summary>
+    public void EnsureCanAccept(MatchEvent matchEvent)
+    {
+        EnsureEventsCanBeChanged();
+        EnsureEventBelongsToMatch(matchEvent);
+    }
+
+    private void EnsureEventBelongsToMatch(MatchEvent matchEvent)
+    {
+        if (matchEvent.MatchId != Id)
+            throw new DomainException("Событие относится к другому матчу.");
+
+        if (matchEvent.TeamId is { } teamId && teamId != HomeTeamId && teamId != AwayTeamId)
+            throw new DomainException("Событие относится к команде, которая не играет в этом матче.");
     }
 }

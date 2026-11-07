@@ -21,6 +21,7 @@ internal sealed class LeagueConfiguration : IEntityTypeConfiguration<League>
         builder.Property(l => l.Region).HasMaxLength(200);
         builder.Property(l => l.DataSource).IsRequired();
         builder.Property(l => l.Status).IsRequired();
+        builder.Property(l => l.LogoUrl).HasMaxLength(500);
         builder.Property(l => l.CreatedAtUtc).IsRequired();
 
         builder.HasIndex(l => l.Slug).IsUnique();

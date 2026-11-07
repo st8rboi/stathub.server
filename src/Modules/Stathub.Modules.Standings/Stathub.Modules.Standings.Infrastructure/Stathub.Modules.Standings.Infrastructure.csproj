@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stathub.Modules.Standings.Domain\Stathub.Modules.Standings.Domain.csproj" />
+    <ProjectReference Include="..\Stathub.Modules.Standings.Application\Stathub.Modules.Standings.Application.csproj" />
+    <ProjectReference Include="..\..\Stathub.Modules.Leagues\Stathub.Modules.Leagues.Application\Stathub.Modules.Leagues.Application.csproj" />
+    <ProjectReference Include="..\..\Stathub.Modules.Matches\Stathub.Modules.Matches.Application\Stathub.Modules.Matches.Application.csproj" />
+    <ProjectReference Include="..\..\Stathub.Modules.Teams\Stathub.Modules.Teams.Application\Stathub.Modules.Teams.Application.csproj" />
+  </ItemGroup>
+
+</Project>

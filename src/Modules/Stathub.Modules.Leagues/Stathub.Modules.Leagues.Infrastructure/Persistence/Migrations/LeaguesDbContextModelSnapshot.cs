@@ -38,6 +38,10 @@ namespace Stathub.Modules.Leagues.Infrastructure.Persistence.Migrations
                     b.Property<int>("DataSource")
                         .HasColumnType("integer");
 
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)

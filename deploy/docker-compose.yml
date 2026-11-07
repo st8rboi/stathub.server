@@ -1,0 +1,92 @@
+# Прод-стек Stathub для одного VPS (2 ГБ RAM). Запуск из каталога с этим файлом:
+#   docker compose up -d
+# Секреты — в .env рядом (шаблон: .env.example). Инструкция: README.md.
+
+name: stathub
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stathub
+      POSTGRES_USER: stathub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+    # Настройки под маленький сервер: память ограничена 512 МБ на контейнер.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=384MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=50
+    shm_size: 128mb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Порт наружу НЕ публикуется: Docker обходит ufw, а API ходит в БД по внутренней сети.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stathub -d stathub"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging: *logging
+
+  api:
+    image: ${API_IMAGE:-stathub-api:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Доверять X-Forwarded-For/Proto от nginx (иначе лимит попыток входа считается по IP nginx).
+      # Безопасно, потому что порт API наружу не опубликован — достучаться можно только через nginx.
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=stathub;Username=stathub;Password=${POSTGRES_PASSWORD}"
+      Jwt__Key: ${JWT_KEY:?Задайте JWT_KEY в .env}
+    volumes:
+      - uploads:/app/wwwroot/uploads
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging: *logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"     # публичная витрина
+      - "8081:8081" # админка (пока без домена)
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      # Монтируется родительский каталог: при замене sites/public или sites/admin целиком
+      # nginx сразу видит новую сборку без перезапуска.
+      - ./sites:/usr/share/nginx/sites:ro
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging: *logging
+
+volumes:
+  pgdata:
+  uploads:

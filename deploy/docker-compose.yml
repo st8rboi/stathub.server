@@ -57,7 +57,9 @@ services:
       # Доверять X-Forwarded-For/Proto от nginx (иначе лимит попыток входа считается по IP nginx).
       # Безопасно, потому что порт API наружу не опубликован — достучаться можно только через nginx.
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=stathub;Username=stathub;Password=${POSTGRES_PASSWORD}"
+      # Gss Encryption Mode=Disable: БД во внутренней сети, Kerberos не нужен — без этого Npgsql при каждом
+      # подключении пытается загрузить libgssapi_krb5 (её нет в образе) и пишет ошибку в лог.
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=stathub;Username=stathub;Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable"
       Jwt__Key: ${JWT_KEY:?Задайте JWT_KEY в .env}
     volumes:
       - uploads:/app/wwwroot/uploads

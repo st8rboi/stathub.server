@@ -38,6 +38,13 @@ public static class DatabaseMigrationInitializer
         await ApplyAsync<FinanceDbContext>(
             serviceProvider, cancellationToken);
 
+        await using (var scope = serviceProvider.CreateAsyncScope())
+        {
+            await DisciplineModule.MoveLegacyMigrationHistoryAsync(
+                scope.ServiceProvider.GetRequiredService<DisciplineDbContext>(),
+                cancellationToken);
+        }
+
         await ApplyAsync<DisciplineDbContext>(
             serviceProvider, cancellationToken);
     }

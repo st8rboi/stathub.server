@@ -34,7 +34,11 @@ services:
     shm_size: 128mb
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Порт наружу НЕ публикуется: Docker обходит ufw, а API ходит в БД по внутренней сети.
+    # Порт открыт ТОЛЬКО на localhost сервера — для подключения через SSH-туннель (DBeaver и т.п.).
+    # Никогда не писать "5432:5432" без 127.0.0.1: Docker обходит ufw, и БД станет видна из интернета.
+    # API ходит в БД по внутренней сети compose, этот порт ему не нужен.
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U stathub -d stathub"]
       interval: 10s
@@ -57,7 +61,9 @@ services:
       # Доверять X-Forwarded-For/Proto от nginx (иначе лимит попыток входа считается по IP nginx).
       # Безопасно, потому что порт API наружу не опубликован — достучаться можно только через nginx.
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=stathub;Username=stathub;Password=${POSTGRES_PASSWORD}"
+      # Gss Encryption Mode=Disable: БД во внутренней сети, Kerberos не нужен — без этого Npgsql при каждом
+      # подключении пытается загрузить libgssapi_krb5 (её нет в образе) и пишет ошибку в лог.
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=stathub;Username=stathub;Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable"
       Jwt__Key: ${JWT_KEY:?Задайте JWT_KEY в .env}
     volumes:
       - uploads:/app/wwwroot/uploads

@@ -122,6 +122,15 @@ internal sealed class DisciplineDirectory(
 
 public static class DisciplineModule
 {
+    /// <summary>
+    /// Своя таблица истории миграций, как у остальных модулей. До её появления миграции Discipline
+    /// писались в общую "__EFMigrationsHistory" — перенос записей см. в DatabaseMigrationInitializer.
+    /// </summary>
+    public const string HistoryTable = "__EFMigrationsHistory_Discipline";
+
+    /// <summary>Таблица истории по умолчанию, куда писались миграции Discipline раньше.</summary>
+    public const string LegacyHistoryTable = "__EFMigrationsHistory";
+
     public static IServiceCollection AddDisciplineModule(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -129,7 +138,12 @@ public static class DisciplineModule
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Строка подключения 'Postgres' не настроена");
 
-        services.AddDbContext<DisciplineDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<DisciplineDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsHistoryTable(
+                    HistoryTable,
+                    "public")));
 
         services.AddScoped<IDisqualificationRepository, DisqualificationRepository>();
         services.AddScoped<ITeamMatchesSource, TeamMatchesSource>();
@@ -137,5 +151,47 @@ public static class DisciplineModule
         services.AddScoped<DisciplineService>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Переносит записи о применённых миграциях Discipline из общей таблицы истории в свою.
+    /// Без этого на уже развёрнутой базе EF не найдёт их в новой таблице и попытается
+    /// применить InitialDiscipline повторно (таблицы уже есть → падение при старте).
+    /// Идемпотентно; на чистой базе (нет общей таблицы) ничего не делает.
+    /// Вызывать до MigrateAsync. Имена таблиц в SQL совпадают с HistoryTable / LegacyHistoryTable.
+    /// </summary>
+    public static async Task MoveLegacyMigrationHistoryAsync(
+        DisciplineDbContext dbContext,
+        CancellationToken cancellationToken = default)
+    {
+        var legacyExists = await dbContext.Database
+            .SqlQuery<bool>($"SELECT to_regclass({"public.\"" + LegacyHistoryTable + "\""}) IS NOT NULL AS \"Value\"")
+            .SingleAsync(cancellationToken);
+
+        if (!legacyExists)
+            return;
+
+        var migrationIds = dbContext.Database.GetMigrations().ToArray();
+
+        // Та же структура, что создаёт EF для таблицы истории.
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS public."__EFMigrationsHistory_Discipline" (
+                "MigrationId" character varying(150) NOT NULL,
+                "ProductVersion" character varying(32) NOT NULL,
+                CONSTRAINT "PK___EFMigrationsHistory_Discipline" PRIMARY KEY ("MigrationId")
+            )
+            """,
+            cancellationToken);
+
+        await dbContext.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO public."__EFMigrationsHistory_Discipline" ("MigrationId", "ProductVersion")
+            SELECT "MigrationId", "ProductVersion"
+            FROM public."__EFMigrationsHistory"
+            WHERE "MigrationId" = ANY({migrationIds})
+            ON CONFLICT ("MigrationId") DO NOTHING
+            """,
+            cancellationToken);
     }
 }

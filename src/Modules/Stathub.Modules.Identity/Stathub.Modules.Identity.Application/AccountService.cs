@@ -179,6 +179,33 @@ public sealed class AccountService(
         await assignments.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Матч удалён — его назначения больше не действуют. Отзыв, а не удаление: история
+    /// назначений сохраняется так же, как при обычном отзыве.
+    /// </summary>
+    public async Task RevokeMatchAssignmentsAsync(
+        Guid tenantId,
+        Guid matchId,
+        CancellationToken cancellationToken = default)
+    {
+        var tenantAssignments = await assignments.GetActiveByTenantAsync(tenantId, cancellationToken);
+        var matchAssignments = tenantAssignments
+            .Where(assignment => assignment.ScopeType == RoleScopeType.Match && assignment.ScopeId == matchId)
+            .ToList();
+
+        if (matchAssignments.Count == 0)
+            return;
+
+        // GetActiveByTenantAsync читает без отслеживания — для изменения берём каждое назначение отдельно.
+        foreach (var item in matchAssignments)
+        {
+            var assignment = await assignments.GetByIdAsync(item.Id, cancellationToken);
+            assignment?.Revoke();
+        }
+
+        await assignments.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<AssignmentSummaryDto>> ListAssignmentsAsync(
         Guid tenantId,
         CancellationToken cancellationToken = default)

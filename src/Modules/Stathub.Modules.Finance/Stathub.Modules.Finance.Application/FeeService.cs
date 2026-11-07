@@ -99,6 +99,63 @@ public sealed class FeeService(
         await charges.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Проверка до замены команд в матче: долг можно перенести на новую команду,
+    /// а оплаченный прежней командой взнос — нет.
+    /// </summary>
+    public async Task EnsureMatchTeamsCanChangeAsync(
+        Guid matchId,
+        Guid homeTeamId,
+        Guid awayTeamId,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var charge in await charges.ListByMatchAsync(matchId, cancellationToken))
+        {
+            var newTeamId = charge.Side == ChargeSide.Home ? homeTeamId : awayTeamId;
+            if (newTeamId != charge.TeamId && charge.Status == ChargeStatus.Paid)
+                throw new ConflictException(
+                    "Взнос по матчу уже оплачен прежней командой: заменить команду нельзя.");
+        }
+    }
+
+    /// <summary>В матче заменили команды — неоплаченные начисления переходят к новым командам.</summary>
+    public async Task ReassignMatchTeamsAsync(
+        Guid matchId,
+        Guid homeTeamId,
+        Guid awayTeamId,
+        CancellationToken cancellationToken = default)
+    {
+        var matchCharges = await charges.ListByMatchAsync(matchId, cancellationToken);
+        if (matchCharges.Count == 0)
+            return;
+
+        foreach (var charge in matchCharges)
+            charge.ChangeTeam(charge.Side == ChargeSide.Home ? homeTeamId : awayTeamId);
+
+        await charges.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Проверка до удаления матча: оплаченные взносы удалять нельзя.</summary>
+    public async Task EnsureMatchChargesRemovableAsync(Guid matchId, CancellationToken cancellationToken = default)
+    {
+        foreach (var charge in await charges.ListByMatchAsync(matchId, cancellationToken))
+            charge.EnsureCanRemove();
+    }
+
+    /// <summary>Удаление начислений ошибочно созданного (и уже удалённого) матча.</summary>
+    public async Task RemoveMatchChargesAsync(Guid matchId, CancellationToken cancellationToken = default)
+    {
+        var matchCharges = await charges.ListByMatchAsync(matchId, cancellationToken);
+        if (matchCharges.Count == 0)
+            return;
+
+        foreach (var charge in matchCharges)
+            charge.EnsureCanRemove();
+
+        charges.RemoveRange(matchCharges);
+        await charges.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ChargeDto>> ListStageChargesAsync(
         Guid stageId,
         bool onlyDebt,

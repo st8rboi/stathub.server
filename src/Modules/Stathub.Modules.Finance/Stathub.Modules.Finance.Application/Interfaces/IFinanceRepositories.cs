@@ -23,6 +23,11 @@ public interface IMatchChargeRepository
 
     Task<MatchCharge?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Начисления матча (отслеживаются EF: их меняют при правке и удалении матча).</summary>
+    Task<IReadOnlyList<MatchCharge>> ListByMatchAsync(Guid matchId, CancellationToken cancellationToken = default);
+
+    void RemoveRange(IReadOnlyCollection<MatchCharge> charges);
+
     Task<IReadOnlyList<MatchCharge>> ListByStageAsync(
         Guid stageId,
         bool onlyDebt,

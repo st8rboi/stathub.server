@@ -61,6 +61,8 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
         await dbContext.Matches.AddAsync(match, cancellationToken);
     }
 
+    public void Remove(Match match) => dbContext.Matches.Remove(match);
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         await dbContext.SaveChangesAsync(cancellationToken);

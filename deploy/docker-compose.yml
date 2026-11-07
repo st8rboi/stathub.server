@@ -100,6 +100,27 @@ services:
           memory: 64M
     logging: *logging
 
+  # Telegram-бот (открывает mini app). Работает через вебхук: Telegram → nginx (/tg/webhook) → bot,
+  # отвечает в теле ответа, сам в api.telegram.org не ходит (из РФ недоступен). Токен здесь не нужен.
+  # Настройка вебхука и кнопки меню — с локального компьютера: deploy/README.md, раздел «Telegram-бот».
+  # Код подключён томом: после изменения bot.mjs нужен docker compose restart bot (CI делает это сам).
+  bot:
+    image: node:22-alpine
+    restart: unless-stopped
+    user: node
+    working_dir: /app
+    command: ["node", "bot.mjs"]
+    environment:
+      WEBHOOK_SECRET: ${BOT_WEBHOOK_SECRET:-}
+      BOT_USERNAME: ${BOT_USERNAME:-}
+    volumes:
+      - ./bot:/app:ro
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging: *logging
+
   # Продление сертификата Let's Encrypt. Первичный выпуск — deploy/ssl.sh.
   # Пока сертификата нет, renew ничего не делает.
   certbot:

@@ -232,6 +232,42 @@ AAAA-записей быть не должно (у сервера нет IPv6 в
 
 ---
 
+## Telegram-бот
+
+`bot/bot.mjs` — бот, который открывает mini app статхаб.рф на весь экран. Из РФ сервер не достучится до
+`api.telegram.org`, поэтому бот работает только на вебхуке: Telegram шлёт апдейт на
+`https://статхаб.рф/tg/webhook` (nginx → контейнер `bot`), бот отвечает прямо в теле ответа. Токен на
+сервере не хранится. Запросы без правильного `X-Telegram-Bot-Api-Secret-Token` получают 403.
+
+**Настройка (один раз):**
+
+1. В @BotFather: `/mybots` → бот → Bot Settings → Configure Mini App → Enable Mini App, URL
+   `https://xn--80aad5dfbv.xn--p1ai/`; там же Launch Mode → Fullscreen.
+2. На сервере сгенерировать секрет и дописать в `.env` (`BOT_USERNAME` — имя бота без @):
+
+   ```bash
+   echo "BOT_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> .env
+   echo "BOT_USERNAME=<имя_бота>" >> .env
+   docker compose up -d bot
+   grep BOT_WEBHOOK_SECRET .env   # понадобится на шаге 3
+   ```
+
+3. С компьютера, где Telegram доступен (PowerShell, из `deploy/bot`):
+
+   ```powershell
+   $env:BOT_TOKEN = '<токен>'; $env:WEBHOOK_SECRET = '<секрет из .env>'
+   node bot.mjs setup   # вебхук, кнопка меню, команда /start
+   node bot.mjs info    # проверить: pending_update_count, last_error_message
+   ```
+
+Проверка: написать боту `/start`, в `docker compose logs bot` появится `message from ...`. Если бот молчит —
+`node bot.mjs info`: `last_error_message` покажет, дошёл ли Telegram до сервера (таймаут = входящие от
+Telegram тоже режутся).
+
+При смене токена (`/revoke`) повторить шаг 3. При смене секрета — шаги 2 и 3.
+
+---
+
 ## Полезные команды
 
 ```bash

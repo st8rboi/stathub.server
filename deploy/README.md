@@ -115,7 +115,7 @@ docker compose exec -T postgres pg_restore -U stathub -d stathub --clean --if-ex
 
 | Репозиторий | На PR в `main` | После merge в `main` |
 |---|---|---|
-| `stathub.server` | build + тесты (с Postgres) | + сборка образа → загрузка на сервер → `docker compose up -d` → проверка, что API ответил |
+| `stathub.server` | build + тесты (с Postgres) | + `dotnet publish` → rsync в `~/stathub/api/publish` (только изменившиеся файлы) → `docker build` на сервере по `api/Dockerfile` → `docker compose up -d` → проверка, что API ответил |
 | `stathub.client` | lint + build админки и витрины | + выкладка `dist` в `sites/admin` и `sites/public` |
 
 Workflow: `stathub.server/.github/workflows/ci-cd.yml`, `stathub.client/.github/workflows/ci-cd.yml`.

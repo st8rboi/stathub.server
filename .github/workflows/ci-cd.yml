@@ -64,14 +64,25 @@ jobs:
     needs: test
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       IMAGE: stathub-api:${{ github.sha }}
       TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t "$IMAGE" .
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Образ собирается на сервере (deploy/api/Dockerfile), сюда — только publish.
+      # Dev-настройки (в т.ч. dev-ключ JWT) и загруженные локально логотипы в прод не кладём.
+      - name: Publish
+        run: |
+          dotnet publish src/Stathub.WebApi/Stathub.WebApi.csproj \
+            -c Release -o publish -p:UseAppHost=false
+          rm -f publish/appsettings.Development.json
+          rm -rf publish/wwwroot/uploads
 
       - name: Set up SSH
         env:
@@ -82,17 +93,30 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # Keepalive: подвисшее соединение рвётся через ~1 мин, а не висит до таймаута джобы.
+          printf 'Host *\n  ServerAliveInterval 15\n  ServerAliveCountMax 4\n' > ~/.ssh/config
 
       # .env, sites/ и backups/ в репозитории отсутствуют, поэтому rsync их не трогает (без --delete).
+      # Заодно кладёт deploy/api/Dockerfile в ~/stathub/api/.
       - name: Sync deploy configs
+        timeout-minutes: 3
         run: |
           rsync -rtz --chmod=D755,F644 \
             --exclude '.gitignore' --exclude '.gitattributes' --exclude 'README.md' \
             deploy/ "$TARGET:stathub/"
 
-      # Без registry: образ уходит на сервер напрямую по SSH (~70–100 МБ в gzip).
-      - name: Upload image
-        run: docker save "$IMAGE" | gzip | ssh "$TARGET" docker load
+      # Без registry и без docker save: по сети идут только изменившиеся файлы (-c сравнивает
+      # по содержимому, т.к. mtime после publish всегда новый) — обычно наши DLL, пара МБ.
+      - name: Upload app
+        timeout-minutes: 5
+        run: |
+          rsync -rcz --delete --chmod=D755,F644 \
+            publish/ "$TARGET:stathub/api/publish/"
+
+      # Базовый aspnet:10.0 берётся из кэша сервера; при первом деплое скачивается один раз.
+      - name: Build image on server
+        timeout-minutes: 5
+        run: ssh "$TARGET" "cd ~/stathub/api && docker build -q -t '$IMAGE' ."
 
       - name: Restart services
         run: |

@@ -79,18 +79,38 @@ services:
     depends_on:
       - api
     ports:
-      - "80:80"     # публичная витрина
-      - "8081:8081" # админка (пока без домена)
+      - "80:80"   # редирект на HTTPS + проверка Let's Encrypt
+      - "443:443" # витрина (статхаб.рф) и админка (admin.статхаб.рф)
+    # Раз в 6 ч перечитываем конфиг, чтобы подхватить продлённый сертификат.
+    # exec — чтобы nginx был PID 1 и корректно получал SIGTERM при остановке.
+    command: ["/bin/sh", "-c", "while :; do sleep 6h & wait $${!}; nginx -s reload; done & exec nginx -g 'daemon off;'"]
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/snippets:/etc/nginx/snippets:ro
       # Монтируется родительский каталог: при замене sites/public или sites/admin целиком
       # nginx сразу видит новую сборку без перезапуска.
       - ./sites:/usr/share/nginx/sites:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
     deploy:
       resources:
         limits:
           memory: 64M
+    logging: *logging
+
+  # Продление сертификата Let's Encrypt. Первичный выпуск — deploy/ssl.sh.
+  # Пока сертификата нет, renew ничего не делает.
+  certbot:
+    image: certbot/certbot:v5.8.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done"]
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     logging: *logging
 
 volumes:

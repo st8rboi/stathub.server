@@ -40,6 +40,47 @@ public sealed class Player : AggregateRoot
 
     public static Player Create(string fullName, DateOnly? birthDate = null)
     {
+        var normalizedName = NormalizeName(fullName);
+
+        if (birthDate is not null)
+            ValidateBirthDate(birthDate.Value);
+
+        return new Player(Guid.NewGuid(), normalizedName, birthDate);
+    }
+
+    /// <summary>
+    /// Исправление ФИО и даты рождения. Игрок общий для всех организаторов, поэтому, как и
+    /// логотип команды, править его может только организатор, в чьих лигах он один используется;
+    /// иначе — через техподдержку. <paramref name="usedByOrganizerIds"/> — организаторы,
+    /// в турнирах которых игрок заявлен или участвовал в событиях матчей.
+    /// </summary>
+    public void Update(
+        string fullName,
+        DateOnly? birthDate,
+        Guid tenantId,
+        IReadOnlyCollection<Guid> usedByOrganizerIds)
+    {
+        EnsureCanEdit(tenantId, usedByOrganizerIds);
+
+        var normalizedName = NormalizeName(fullName);
+
+        if (birthDate is not null)
+            ValidateBirthDate(birthDate.Value);
+
+        FullName = normalizedName;
+        BirthDate = birthDate;
+    }
+
+    /// <summary>Править можно игрока, который не используется в лигах других организаторов.</summary>
+    public static void EnsureCanEdit(Guid tenantId, IReadOnlyCollection<Guid> usedByOrganizerIds)
+    {
+        if (usedByOrganizerIds.Any(organizerId => organizerId != tenantId))
+            throw new ForbiddenException(
+                "Игрок используется в лигах других организаторов. Изменить его можно через техподдержку.");
+    }
+
+    private static string NormalizeName(string fullName)
+    {
         if (string.IsNullOrWhiteSpace(fullName))
             throw new DomainException("ФИО игрока обязательное поле.");
 
@@ -48,10 +89,7 @@ public sealed class Player : AggregateRoot
         if (normalizedName.Length > 200)
             throw new DomainException("ФИО игрока не может быть длиннее 200 символов.");
 
-        if (birthDate is not null)
-            ValidateBirthDate(birthDate.Value);
-
-        return new Player(Guid.NewGuid(), normalizedName, birthDate);
+        return normalizedName;
     }
 
     /// <summary>

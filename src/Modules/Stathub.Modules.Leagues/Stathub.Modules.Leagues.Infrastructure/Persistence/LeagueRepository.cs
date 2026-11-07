@@ -38,6 +38,8 @@ internal sealed class LeagueRepository(LeaguesDbContext dbContext) : ILeagueRepo
     public async Task AddAsync(League league, CancellationToken cancellationToken = default) =>
         await dbContext.Leagues.AddAsync(league, cancellationToken);
 
+    public void Remove(League league) => dbContext.Leagues.Remove(league);
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         try

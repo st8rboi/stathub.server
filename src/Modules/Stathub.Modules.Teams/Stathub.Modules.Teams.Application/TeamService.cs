@@ -8,7 +8,9 @@ namespace Stathub.Modules.Teams.Application;
 /// <summary>
 /// Справочник команд: организатор заводит клуб один раз, а матчи ссылаются на его Id.
 /// </summary>
-public sealed class TeamService(ITeamRepository repository)
+public sealed class TeamService(
+    ITeamRepository repository,
+    IEnumerable<ITeamUsageSource> usageSources)
 {
     public const int DefaultListLimit = 100;
     public const int MaxListLimit = 500;
@@ -28,6 +30,68 @@ public sealed class TeamService(ITeamRepository repository)
 
     public async Task<TeamDto> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         TeamDto.From(await GetOrThrowAsync(id, cancellationToken));
+
+    /// <summary>
+    /// Изменение названия и города. Команда общая для всех организаторов, поэтому, как и логотип,
+    /// её правит только тот, в чьих лигах она одна используется (см. <see cref="Team.Rename"/>).
+    /// </summary>
+    public async Task<TeamDto> UpdateAsync(
+        Guid id,
+        string name,
+        string? city,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var team = await repository.GetForUpdateAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Команда '{id}' не найдена.");
+
+        var usages = await GetUsagesAsync(id, cancellationToken);
+        var organizerIds = usages.SelectMany(usage => usage.OrganizerIds).Distinct().ToList();
+
+        team.Rename(name, city, tenantId, organizerIds);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return TeamDto.From(team);
+    }
+
+    /// <summary>
+    /// Удаление команды, на которую ещё никто не ссылается (ни заявки, ни матчи).
+    /// Использованную команду удалить нельзя: между модулями нет FK, и удаление оставило бы
+    /// матчи и составы с несуществующей командой. Возвращает путь к логотипу, чтобы
+    /// вызывающий удалил файл из хранилища.
+    /// </summary>
+    public async Task<string?> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var team = await repository.GetForUpdateAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Команда '{id}' не найдена.");
+
+        var usages = await GetUsagesAsync(id, cancellationToken);
+        if (usages.Count > 0)
+            throw new ConflictException(
+                $"Команду нельзя удалить: она используется ({string.Join(", ", usages.Select(usage => usage.Description))}).");
+
+        var logoUrl = team.LogoUrl;
+
+        repository.Remove(team);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return logoUrl;
+    }
+
+    private async Task<IReadOnlyList<TeamUsageDto>> GetUsagesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var usages = new List<TeamUsageDto>();
+
+        // Последовательно: параллельные запросы в одном DbContext EF не поддерживает.
+        foreach (var source in usageSources)
+        {
+            var usage = await source.GetUsageAsync(id, cancellationToken);
+            if (usage is not null)
+                usages.Add(usage);
+        }
+
+        return usages;
+    }
 
     /// <summary>
     /// Команда, если организации разрешено менять её логотип. Проверка до сохранения файла:

@@ -68,17 +68,7 @@ public sealed class TournamentTeam : AggregateRoot
             throw new ConflictException("Игрок уже заявлен за эту команду.");
         }
 
-        if (squadNumber is not null)
-        {
-            if (squadNumber is < 1 or > 999)
-                throw new DomainException("Игровой номер должен быть от 1 до 999.");
-
-            if (_registrations.Any(registration =>
-                    registration.SquadNumber == squadNumber && registration.Status == PlayerRegistrationStatus.Active))
-            {
-                throw new ConflictException($"Игровой номер {squadNumber} уже занят в этой команде.");
-            }
-        }
+        EnsureSquadNumberFree(squadNumber);
 
         var registration = PlayerRegistration.Create(Id, playerId, squadNumber, joinedOn);
         _registrations.Add(registration);
@@ -98,14 +88,78 @@ public sealed class TournamentTeam : AggregateRoot
 
     public PlayerRegistration ReleasePlayer(Guid registrationId, DateOnly date)
     {
-        var registration = _registrations.FirstOrDefault(item => item.Id == registrationId)
-            ?? throw new NotFoundException($"Заявка '{registrationId}' не найдена в этой команде.");
+        var registration = GetRegistration(registrationId);
 
         if (registration.Status != PlayerRegistrationStatus.Active)
             throw new ConflictException("Заявка уже закрыта.");
 
         registration.Close(PlayerRegistrationStatus.Released, date);
         return registration;
+    }
+
+    /// <summary>
+    /// Смена игрового номера в активной заявке. Номер — атрибут заявки, а не человека,
+    /// поэтому это не правка истории: закрытые заявки не меняются (documentation/doc.md §7).
+    /// </summary>
+    public PlayerRegistration ChangeSquadNumber(Guid registrationId, int? squadNumber)
+    {
+        var registration = GetRegistration(registrationId);
+
+        if (registration.Status != PlayerRegistrationStatus.Active)
+            throw new ConflictException("Номер можно менять только в активной заявке.");
+
+        EnsureSquadNumberFree(squadNumber, exceptRegistrationId: registrationId);
+
+        registration.ChangeSquadNumber(squadNumber);
+        return registration;
+    }
+
+    /// <summary>
+    /// Удаление ошибочной заявки игрока. Разрешено, только пока по ней нет событий в матчах:
+    /// иначе протокол потерял бы контекст. Для ухода из команды есть отзаявка и трансфер —
+    /// они сохраняют историю (documentation/doc.md §7).
+    /// </summary>
+    public void RemoveRegistration(Guid registrationId, bool hasMatchEvents)
+    {
+        var registration = GetRegistration(registrationId);
+
+        if (hasMatchEvents)
+            throw new ConflictException(
+                "Заявку нельзя удалить: у игрока уже есть события в матчах за эту команду. Отзаявите его.");
+
+        _registrations.Remove(registration);
+    }
+
+    /// <summary>
+    /// Удалить заявку команды можно, только пока у неё нет матчей на этапе. Иначе — снять с этапа.
+    /// Заявки игроков удаляются вместе с ней: без матчей событий у них быть не может.
+    /// </summary>
+    public static void EnsureCanDelete(int matchesCount)
+    {
+        if (matchesCount > 0)
+            throw new ConflictException(
+                $"Заявку команды нельзя удалить: у команды есть матчи на этапе ({matchesCount}). Снимите её с этапа.");
+    }
+
+    private PlayerRegistration GetRegistration(Guid registrationId) =>
+        _registrations.FirstOrDefault(item => item.Id == registrationId)
+        ?? throw new NotFoundException($"Заявка '{registrationId}' не найдена в этой команде.");
+
+    private void EnsureSquadNumberFree(int? squadNumber, Guid? exceptRegistrationId = null)
+    {
+        if (squadNumber is null)
+            return;
+
+        if (squadNumber is < 1 or > 999)
+            throw new DomainException("Игровой номер должен быть от 1 до 999.");
+
+        if (_registrations.Any(registration =>
+                registration.Id != exceptRegistrationId &&
+                registration.SquadNumber == squadNumber &&
+                registration.Status == PlayerRegistrationStatus.Active))
+        {
+            throw new ConflictException($"Игровой номер {squadNumber} уже занят в этой команде.");
+        }
     }
 
     /// <summary>Снятие команды с этапа: все активные заявки закрываются, история остаётся.</summary>

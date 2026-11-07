@@ -28,6 +28,9 @@ internal sealed class PlayerRepository(PlayersDbContext dbContext) : IPlayerRepo
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
+    public Task<Player?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default) =>
+        dbContext.Players.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
     public async Task<IReadOnlyList<Player>> FindByNameAsync(
         string query,
         int limit,
@@ -78,6 +81,8 @@ internal sealed class PlayerRepository(PlayersDbContext dbContext) : IPlayerRepo
 
     public async Task AddAsync(Player player, CancellationToken cancellationToken = default) =>
         await dbContext.Players.AddAsync(player, cancellationToken);
+
+    public void Remove(Player player) => dbContext.Players.Remove(player);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);

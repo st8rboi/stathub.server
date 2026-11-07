@@ -7,7 +7,7 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Leagues.Application;
 
-public sealed class LeagueService(ILeagueRepository repository)
+public sealed class LeagueService(ILeagueRepository repository, ITournamentRepository tournamentRepository)
 {
     public async Task<Guid> CreateLeagueAsync(
         Guid organizerId,
@@ -104,6 +104,48 @@ public sealed class LeagueService(ILeagueRepository repository)
         await repository.SaveChangesAsync(cancellationToken);
 
         return LeagueDto.From(league);
+    }
+
+    /// <summary>Изменение названия, slug, города и региона лиги.</summary>
+    public async Task<LeagueDto> UpdateAsync(
+        Guid id,
+        string name,
+        string slug,
+        string? city,
+        string? region,
+        CancellationToken cancellationToken = default)
+    {
+        var league = await GetOrThrowAsync(id, cancellationToken);
+
+        league.Update(name, slug, city, region);
+
+        // Slug — часть публичного адреса лиги, он уникален среди всех организаторов.
+        var sameSlug = await repository.GetBySlugAsync(league.Slug, cancellationToken);
+        if (sameSlug is not null && sameSlug.Id != league.Id)
+            throw new ConflictException($"Лига со slug '{league.Slug}' уже существует.");
+
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return LeagueDto.From(league);
+    }
+
+    /// <summary>
+    /// Удаление пустой лиги (без турниров). Возвращает путь к логотипу, чтобы вызывающий
+    /// удалил файл из хранилища.
+    /// </summary>
+    public async Task<string?> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var league = await GetOrThrowAsync(id, cancellationToken);
+
+        var tournaments = await tournamentRepository.ListByLeagueAsync(id, cancellationToken);
+        League.EnsureCanDelete(tournaments.Count);
+
+        var logoUrl = league.LogoUrl;
+
+        repository.Remove(league);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return logoUrl;
     }
 
     public async Task ArchiveAsync(Guid id, CancellationToken cancellationToken = default)

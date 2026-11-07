@@ -6,6 +6,9 @@ using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Infrastructure.Persistence;
 using Stathub.Modules.Matches.Infrastructure.Services;
 using Stathub.Modules.Leagues.Application.Interfaces;
+using Stathub.Modules.Players.Application.Interfaces;
+using Stathub.Modules.Rosters.Application.Interfaces;
+using Stathub.Modules.Teams.Application.Interfaces;
 
 namespace Stathub.Modules.Matches.Infrastructure;
 
@@ -28,6 +31,10 @@ public static class MatchesModule
         services.AddScoped<IMatchFormatProvider, MatchFormatProvider>();
         services.AddScoped<IMatchResultsReader, MatchResultsReader>();
         services.AddScoped<ITournamentPlayerEventReader, TournamentPlayerEventReader>();
+        services.AddScoped<ITeamUsageSource, MatchTeamUsageSource>();
+        services.AddScoped<IPlayerUsageSource, MatchPlayerUsageSource>();
+        services.AddScoped<ICompetitionUsageSource, MatchCompetitionUsageSource>();
+        services.AddScoped<IRosterUsageSource, MatchRosterUsageSource>();
         services.AddScoped<MatchService>();
         services.AddScoped<MatchEventService>();
         return services;

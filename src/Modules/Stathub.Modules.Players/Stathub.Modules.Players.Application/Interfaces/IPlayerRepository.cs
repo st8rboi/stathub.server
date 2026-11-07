@@ -6,6 +6,9 @@ public interface IPlayerRepository
 {
     Task<Player?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Загрузка для изменения: чтение отслеживается EF, иначе SaveChanges не увидит правку.</summary>
+    Task<Player?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Подсказки существующих игроков для typeahead-поиска при добавлении в заявку.
     /// Поиск устойчив к небольшим опечаткам (триграммы) и ограничен <paramref name="limit"/>.
@@ -31,6 +34,8 @@ public interface IPlayerRepository
         CancellationToken cancellationToken = default);
 
     Task AddAsync(Player player, CancellationToken cancellationToken = default);
+
+    void Remove(Player player);
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

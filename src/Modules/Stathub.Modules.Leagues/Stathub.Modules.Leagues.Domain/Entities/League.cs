@@ -81,6 +81,39 @@ public sealed class League : AggregateRoot
             dataSource);
     }
 
+    /// <summary>
+    /// Изменение карточки лиги. Вид спорта и источник данных не меняются: от них зависят
+    /// правила и импорт. Опубликованная лига не может остаться без города (см. <see cref="Publish"/>).
+    /// </summary>
+    public void Update(string name, string slug, string? city, string? region)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DomainException("Название лиги обязательное поле.");
+
+        if (string.IsNullOrWhiteSpace(slug))
+            throw new DomainException("Slug лиги обязательное поле.");
+
+        var normalizedCity = NormalizeOptional(city);
+        if (Status == LeagueStatus.Published && normalizedCity is null)
+            throw new DomainException("У опубликованной лиги город обязателен.");
+
+        Name = name.Trim();
+        Slug = slug.Trim().ToLowerInvariant();
+        City = normalizedCity;
+        Region = NormalizeOptional(region);
+    }
+
+    /// <summary>
+    /// Удалить можно только пустую лигу: турниры тянут за собой заявки, матчи и статистику,
+    /// которые живут в других модулях. Сначала удаляются турниры.
+    /// </summary>
+    public static void EnsureCanDelete(int tournamentsCount)
+    {
+        if (tournamentsCount > 0)
+            throw new ConflictException(
+                $"Лигу нельзя удалить: в ней есть турниры ({tournamentsCount}). Сначала удалите их или архивируйте лигу.");
+    }
+
     public void Publish()
     {
         if (Status != LeagueStatus.Draft)

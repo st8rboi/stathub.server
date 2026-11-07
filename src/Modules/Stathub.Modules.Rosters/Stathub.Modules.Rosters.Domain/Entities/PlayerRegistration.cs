@@ -43,6 +43,8 @@ public sealed class PlayerRegistration : Entity
         DateOnly joinedOn) =>
         new(Guid.NewGuid(), tournamentTeamId, playerId, squadNumber, joinedOn);
 
+    internal void ChangeSquadNumber(int? squadNumber) => SquadNumber = squadNumber;
+
     internal void Close(PlayerRegistrationStatus status, DateOnly date)
     {
         if (status == PlayerRegistrationStatus.Active)

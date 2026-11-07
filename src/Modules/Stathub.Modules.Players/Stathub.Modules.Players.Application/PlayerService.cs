@@ -5,7 +5,9 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Players.Application;
 
-public sealed class PlayerService(IPlayerRepository repository)
+public sealed class PlayerService(
+    IPlayerRepository repository,
+    IEnumerable<IPlayerUsageSource> usageSources)
 {
     public const int DefaultSearchLimit = 10;
     public const int MaxSearchLimit = 50;
@@ -96,6 +98,63 @@ public sealed class PlayerService(IPlayerRepository repository)
         var players = await repository.FindByNameAsync(query.Trim(), limit, cancellationToken);
 
         return players.Select(PlayerSuggestionDto.From).ToList();
+    }
+
+    /// <summary>
+    /// Исправление ФИО и даты рождения. Игрок общий для всех организаторов, поэтому, как и логотип
+    /// команды, его правит только тот, в чьих лигах он один используется (см. <see cref="Player.Update"/>).
+    /// </summary>
+    public async Task<PlayerDto> UpdateAsync(
+        Guid id,
+        string fullName,
+        DateOnly? birthDate,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var player = await repository.GetForUpdateAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Игрок '{id}' не найден.");
+
+        var usages = await GetUsagesAsync(id, cancellationToken);
+        var organizerIds = usages.SelectMany(usage => usage.OrganizerIds).Distinct().ToList();
+
+        player.Update(fullName, birthDate, tenantId, organizerIds);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return PlayerDto.From(player);
+    }
+
+    /// <summary>
+    /// Удаление игрока, на которого ещё никто не ссылается (ни заявки, ни события матчей).
+    /// Между модулями нет FK, поэтому удаление использованного игрока оставило бы
+    /// составы и протоколы с несуществующим человеком.
+    /// </summary>
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var player = await repository.GetForUpdateAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Игрок '{id}' не найден.");
+
+        var usages = await GetUsagesAsync(id, cancellationToken);
+        if (usages.Count > 0)
+            throw new ConflictException(
+                $"Игрока нельзя удалить: он используется ({string.Join(", ", usages.Select(usage => usage.Description))}).");
+
+        repository.Remove(player);
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<PlayerUsageDto>> GetUsagesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var usages = new List<PlayerUsageDto>();
+
+        // Последовательно: параллельные запросы в одном DbContext EF не поддерживает.
+        foreach (var source in usageSources)
+        {
+            var usage = await source.GetUsageAsync(id, cancellationToken);
+            if (usage is not null)
+                usages.Add(usage);
+        }
+
+        return usages;
     }
 
     private async Task<Player> GetOrThrowAsync(Guid id, CancellationToken cancellationToken) =>

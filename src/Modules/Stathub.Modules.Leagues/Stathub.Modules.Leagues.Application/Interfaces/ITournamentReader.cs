@@ -11,6 +11,14 @@ public interface ITournamentReader
 {
     Task<TournamentStatusInfoDto?> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Организаторы (владельцы лиг) указанных турниров, без повторов. Нужно справочникам
+    /// команд и игроков: общую запись может править только организатор, в чьих лигах она одна используется.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetOrganizerIdsAsync(
+        IReadOnlyCollection<Guid> tournamentIds,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Данные турнира для витрины: имя, лига, логотип и признак публикации.</summary>
     Task<TournamentPublicInfoDto?> GetPublicInfoAsync(
         Guid tournamentId,

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Stathub.Modules.Identity.Application.Interfaces;
 using Stathub.Modules.Players.Application;
 using Stathub.Modules.Players.Application.Dtos;
 using Stathub.WebApi.Contracts.Players;
@@ -12,8 +13,30 @@ namespace Stathub.WebApi.Controllers.Players;
 // Чтение нужно всем в организации (судья показывает авторов событий),
 // создание — только организатору.
 [Authorize(Policy = AuthPolicies.TenantMember)]
-public sealed class PlayersController(PlayerService playerService) : ControllerBase
+public sealed class PlayersController(PlayerService playerService, ICurrentUser currentUser) : ControllerBase
 {
+    /// <summary>
+    /// Исправление ФИО и даты рождения. 403 — игрок используется в лигах других организаторов
+    /// (правка через техподдержку, как с логотипом команды).
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<ActionResult<PlayerDto>> UpdatePlayer(
+        Guid id,
+        UpdatePlayerRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await playerService.UpdateAsync(
+            id, request.FullName, request.BirthDate, currentUser.TenantId, cancellationToken));
+
+    /// <summary>Удаление игрока. 409 — игрок уже есть в заявках или событиях матчей.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<IActionResult> DeletePlayer(Guid id, CancellationToken cancellationToken)
+    {
+        await playerService.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     [HttpPost]
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> CreatePlayer(CreatePlayerRequest request, CancellationToken cancellationToken)

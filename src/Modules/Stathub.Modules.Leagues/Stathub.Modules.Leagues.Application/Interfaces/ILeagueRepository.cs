@@ -16,5 +16,7 @@ public interface ILeagueRepository
 
     Task AddAsync(League league, CancellationToken cancellationToken = default);
 
+    void Remove(League league);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

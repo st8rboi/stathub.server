@@ -10,5 +10,8 @@ public interface ITournamentRepository
 
     Task AddAsync(Tournament tournament, CancellationToken cancellationToken = default);
 
+    /// <summary>Удаление турнира вместе с его этапами (каскад внутри модуля).</summary>
+    void Remove(Tournament tournament);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

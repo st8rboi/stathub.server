@@ -20,6 +20,8 @@ public interface ITeamRepository
 
     Task AddAsync(Team team, CancellationToken cancellationToken = default);
 
+    void Remove(Team team);
+
     /// <summary>Команды по набору идентификаторов — для отображения названий в матчах и составах.</summary>
     Task<IReadOnlyList<Team>> GetByIdsAsync(
         IReadOnlyCollection<Guid> ids,

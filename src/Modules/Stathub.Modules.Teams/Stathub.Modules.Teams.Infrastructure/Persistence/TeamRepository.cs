@@ -48,6 +48,8 @@ internal sealed class TeamRepository(TeamsDbContext dbContext) : ITeamRepository
     public async Task AddAsync(Team team, CancellationToken cancellationToken = default) =>
         await dbContext.Teams.AddAsync(team, cancellationToken);
 
+    public void Remove(Team team) => dbContext.Teams.Remove(team);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);
 

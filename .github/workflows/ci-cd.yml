@@ -132,6 +132,8 @@ jobs:
           # compose использует stathub-api:latest (API_IMAGE в .env); тег с SHA остаётся для отката.
           docker tag "$IMAGE" stathub-api:latest
           docker compose up -d --remove-orphans
+          # Код бота подключён томом — перезапуск подхватывает новый bot.mjs (пара секунд простоя некритична).
+          docker compose restart bot
           # Изменения в nginx/*.conf подхватываются без пересоздания контейнера.
           docker compose exec -T nginx nginx -s reload
 

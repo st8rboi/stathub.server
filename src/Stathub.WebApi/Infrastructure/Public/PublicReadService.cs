@@ -5,6 +5,7 @@ using Stathub.Modules.Leagues.Domain.Enums;
 using Stathub.Modules.Matches.Application;
 using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Domain.Enums;
+using Stathub.Modules.Matches.Domain.Services;
 using Stathub.Modules.Players.Application;
 using Stathub.Modules.Standings.Application;
 using Stathub.Modules.Statistics.Application;
@@ -109,8 +110,8 @@ public sealed class PublicReadService(
             cancellationToken);
 
         var playerIds = state.Events
-            .Where(matchEvent => matchEvent.PlayerId.HasValue)
-            .Select(matchEvent => matchEvent.PlayerId!.Value)
+            .SelectMany(matchEvent => new[] { matchEvent.PlayerId, matchEvent.RelatedPlayerId })
+            .OfType<Guid>()
             .Distinct()
             .ToList();
 
@@ -120,17 +121,28 @@ public sealed class PublicReadService(
 
         var playerNames = players.ToDictionary(player => player.Id, player => player.FullName);
 
+        // Часы считаются по полному логу (с паузами), поэтому до фильтрации.
+        var clock = MatchClock.Compute(state.Events
+            .Select(matchEvent => (matchEvent.Type, matchEvent.OccurredAtUtc))
+            .ToList());
+
         // Паузы внутри периода — служебная деталь судьи, зрителю они видны по стоящим часам.
         var events = state.Events
-            .Where(matchEvent => matchEvent.Type is not (MatchEventType.MatchPaused or MatchEventType.MatchResumed))
-            .Select(matchEvent => new PublicEventDto(
-                matchEvent.Id,
-                matchEvent.Type.ToString(),
-                matchEvent.TeamId is { } teamId ? teams.GetValueOrDefault(teamId)?.Name : null,
-                matchEvent.PlayerId is { } playerId ? playerNames.GetValueOrDefault(playerId) : null,
-                matchEvent.OccurredAtUtc,
-                matchEvent.IsVoided,
-                matchEvent.Reason))
+            .Select((matchEvent, index) => (matchEvent, mark: clock[index]))
+            .Where(item => item.matchEvent.Type is not (MatchEventType.MatchPaused or MatchEventType.MatchResumed))
+            .Select(item => new PublicEventDto(
+                item.matchEvent.Id,
+                item.matchEvent.Type.ToString(),
+                item.matchEvent.TeamId is { } teamId ? teams.GetValueOrDefault(teamId)?.Name : null,
+                item.matchEvent.PlayerId is { } playerId ? playerNames.GetValueOrDefault(playerId) : null,
+                item.matchEvent.OccurredAtUtc,
+                item.matchEvent.IsVoided,
+                item.matchEvent.Reason,
+                item.matchEvent.TeamId,
+                item.matchEvent.RelatedPlayerId is { } relatedId ? playerNames.GetValueOrDefault(relatedId) : null,
+                item.matchEvent.TargetEventId,
+                item.mark?.Period,
+                item.mark?.ElapsedSeconds))
             .ToList();
 
         return new PublicMatchPageDto(ToPublicMatch(state.Match, stage, teams), events);
@@ -332,6 +344,7 @@ public sealed class PublicReadService(
             match.StartedAtUtc,
             match.PeriodStartedAtUtc,
             match.PausedAtUtc,
-            match.PeriodPausedMilliseconds);
+            match.PeriodPausedMilliseconds,
+            match.PeriodDurationMinutes);
     }
 }

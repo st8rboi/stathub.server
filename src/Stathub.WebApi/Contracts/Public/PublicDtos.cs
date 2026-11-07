@@ -69,8 +69,14 @@ public sealed record PublicMatchDto(
     DateTime? StartedAtUtc,
     DateTime? PeriodStartedAtUtc,
     DateTime? PausedAtUtc,
-    long PeriodPausedMilliseconds);
+    long PeriodPausedMilliseconds,
+    // Длительность периода по регламенту матча: витрина считает минуту как «26'» во втором тайме.
+    int PeriodDurationMinutes);
 
+/// <summary>
+/// Событие протокола для витрины. <see cref="Period"/> и <see cref="ElapsedSeconds"/> — игровое
+/// время без пауз (null у событий жизненного цикла); <see cref="TargetEventId"/> — у отмены.
+/// </summary>
 public sealed record PublicEventDto(
     Guid Id,
     string Type,
@@ -78,7 +84,12 @@ public sealed record PublicEventDto(
     string? PlayerName,
     DateTime OccurredAtUtc,
     bool IsVoided,
-    string? Reason);
+    string? Reason,
+    Guid? TeamId,
+    string? RelatedPlayerName,
+    Guid? TargetEventId,
+    int? Period,
+    int? ElapsedSeconds);
 
 public sealed record PublicMatchPageDto(
     PublicMatchDto Match,

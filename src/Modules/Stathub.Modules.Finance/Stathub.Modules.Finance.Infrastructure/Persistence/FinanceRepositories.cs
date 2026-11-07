@@ -33,6 +33,16 @@ internal sealed class MatchChargeRepository(FinanceDbContext dbContext) : IMatch
     public Task<MatchCharge?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.MatchCharges.FirstOrDefaultAsync(charge => charge.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<MatchCharge>> ListByMatchAsync(
+        Guid matchId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.MatchCharges
+            .Where(charge => charge.MatchId == matchId)
+            .ToListAsync(cancellationToken);
+
+    public void RemoveRange(IReadOnlyCollection<MatchCharge> charges) =>
+        dbContext.MatchCharges.RemoveRange(charges);
+
     public async Task<IReadOnlyList<MatchCharge>> ListByStageAsync(
         Guid stageId,
         bool onlyDebt,

@@ -27,6 +27,8 @@ public interface IMatchRepository
 
     Task AddAsync(Match match, CancellationToken cancellationToken = default);
 
+    void Remove(Match match);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 

@@ -87,6 +87,32 @@ public sealed class MatchCharge : AggregateRoot
         Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
     }
 
+    /// <summary>
+    /// В матче заменили команду: долг переходит к новой. Оплаченный взнос не переносится —
+    /// деньги уже получены от прежней команды.
+    /// </summary>
+    public void ChangeTeam(Guid teamId)
+    {
+        if (teamId == Guid.Empty)
+            throw new DomainException("Команда обязательна.");
+
+        if (teamId == TeamId)
+            return;
+
+        EnsureNotPaid("Взнос по матчу уже оплачен прежней командой: заменить команду нельзя.");
+        TeamId = teamId;
+    }
+
+    /// <summary>Удаляется ошибочно созданный матч: оплаченный взнос удалять нельзя.</summary>
+    public void EnsureCanRemove() =>
+        EnsureNotPaid("По матчу есть оплаченный взнос: удалить матч нельзя.");
+
+    private void EnsureNotPaid(string message)
+    {
+        if (Status == ChargeStatus.Paid)
+            throw new ConflictException(message);
+    }
+
     /// <summary>Отмена начисления (например, матч отменён). Оплаченный взнос не отменяется.</summary>
     public void Cancel(string? comment)
     {

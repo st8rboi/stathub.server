@@ -102,6 +102,41 @@ public sealed class Match : AggregateRoot
             format);
     }
 
+    /// <summary>
+    /// Перенос матча и замена команд. Только пока матч не начат и по нему нет событий:
+    /// протокол ссылается на команды, а судья мог уже начать вести матч офлайн.
+    /// </summary>
+    public void Update(DateTime scheduledTimeUtc, Guid homeTeamId, Guid awayTeamId, bool hasEvents)
+    {
+        EnsureNotStarted(hasEvents, "Изменить");
+
+        if (scheduledTimeUtc == default)
+            throw new DomainException("Время начала матча обязательно.");
+        if (homeTeamId == Guid.Empty || awayTeamId == Guid.Empty)
+            throw new DomainException("Обе команды обязательны.");
+        if (homeTeamId == awayTeamId)
+            throw new DomainException("Команда не может играть сама с собой.");
+
+        ScheduledTimeUtc = scheduledTimeUtc;
+        HomeTeamId = homeTeamId;
+        AwayTeamId = awayTeamId;
+    }
+
+    /// <summary>
+    /// Удалить можно только ошибочно созданный матч: не начатый и без событий.
+    /// Сыгранный матч — часть таблицы и статистики.
+    /// </summary>
+    public void EnsureCanDelete(bool hasEvents) => EnsureNotStarted(hasEvents, "Удалить");
+
+    private void EnsureNotStarted(bool hasEvents, string action)
+    {
+        if (Status is not (MatchStatus.Scheduled or MatchStatus.Cancelled))
+            throw new ConflictException($"{action} можно только не начатый матч.");
+
+        if (hasEvents)
+            throw new ConflictException($"{action} матч нельзя: по нему уже есть события в протоколе.");
+    }
+
     /// <summary>Применяет событие жизненного цикла; недопустимый переход даёт DomainException.</summary>
     public void ApplyLifecycle(MatchEvent matchEvent)
     {

@@ -7,7 +7,10 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Matches.Application;
 
-public sealed class MatchService(IMatchRepository repository, IMatchFormatProvider matchFormatProvider)
+public sealed class MatchService(
+    IMatchRepository repository,
+    IMatchEventRepository eventRepository,
+    IMatchFormatProvider matchFormatProvider)
 {
     #region Базовые методы
     /// <summary>
@@ -99,9 +102,49 @@ public sealed class MatchService(IMatchRepository repository, IMatchFormatProvid
         return matches.Select(MatchDto.From).ToList();
     }
 
+    /// <summary>Перенос и замена команд у не начатого матча без событий.</summary>
+    public async Task<MatchDto> UpdateAsync(
+        Guid id,
+        DateTime scheduledTimeUtc,
+        Guid homeTeamId,
+        Guid awayTeamId,
+        CancellationToken cancellationToken = default)
+    {
+        var match = await GetOrThrowAsync(id, cancellationToken);
+
+        match.Update(scheduledTimeUtc, homeTeamId, awayTeamId, await HasEventsAsync(id, cancellationToken));
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return MatchDto.From(match);
+    }
+
+    /// <summary>
+    /// Проверка до удаления: вызывающий сначала убеждается, что матч можно удалить,
+    /// и только потом трогает связанные данные других модулей (взносы).
+    /// </summary>
+    public async Task EnsureCanDeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var match = await GetOrThrowAsync(id, cancellationToken);
+        match.EnsureCanDelete(await HasEventsAsync(id, cancellationToken));
+    }
+
+    /// <summary>Удаление ошибочно созданного матча: не начатого и без событий.</summary>
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var match = await GetOrThrowAsync(id, cancellationToken);
+        match.EnsureCanDelete(await HasEventsAsync(id, cancellationToken));
+
+        repository.Remove(match);
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
     #endregion
 
     #region Вспомогательные методы
+    // Любое событие в логе (включая отменённые) — признак того, что матч уже вели.
+    private async Task<bool> HasEventsAsync(Guid matchId, CancellationToken cancellationToken) =>
+        (await eventRepository.GetByMatchIdAsync(matchId, cancellationToken)).Count > 0;
+
     private async Task<Match> GetOrThrowAsync(Guid id, CancellationToken cancellationToken) =>
         await repository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException($"Матч '{id}' не найден.");

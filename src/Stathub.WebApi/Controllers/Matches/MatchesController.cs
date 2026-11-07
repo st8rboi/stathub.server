@@ -109,6 +109,64 @@ public sealed class MatchesController(
         return Ok(await matchEventService.GetStateAsync(id, cancellationToken));
     }
 
+    /// <summary>
+    /// Перенос матча и замена команд (только не начатый матч без событий).
+    /// Неоплаченные взносы переходят к новым командам; оплаченный взнос блокирует замену (409).
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<ActionResult<MatchDto>> UpdateMatch(
+        Guid id,
+        UpdateMatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
+        var current = await matchService.GetByIdAsync(id, cancellationToken);
+
+        // Те же правила, что при создании: в дивизионе играют только заявленные на этап команды.
+        if (!await rosterService.IsTeamRegisteredAsync(current.StageId, request.HomeTeamId, cancellationToken))
+            throw new DomainException("Хозяева не заявлены на этот этап.");
+
+        if (!await rosterService.IsTeamRegisteredAsync(current.StageId, request.AwayTeamId, cancellationToken))
+            throw new DomainException("Гости не заявлены на этот этап.");
+
+        // Сначала все проверки, затем изменения: у матча и взносов разные БД-контексты.
+        await feeService.EnsureMatchTeamsCanChangeAsync(id, request.HomeTeamId, request.AwayTeamId, cancellationToken);
+
+        var match = await matchService.UpdateAsync(
+            id,
+            request.StartTimeUtc,
+            request.HomeTeamId,
+            request.AwayTeamId,
+            cancellationToken);
+
+        await feeService.ReassignMatchTeamsAsync(id, match.HomeTeamId, match.AwayTeamId, cancellationToken);
+        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
+
+        return Ok(match);
+    }
+
+    /// <summary>
+    /// Удаление ошибочно созданного матча (не начатого, без событий) вместе с его взносами.
+    /// Назначения судей на матч отзываются. 409 — матч уже вели или по нему есть оплаченный взнос.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<IActionResult> DeleteMatch(Guid id, CancellationToken cancellationToken)
+    {
+        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
+
+        // Сначала все проверки, затем изменения: у матча, взносов и назначений разные БД-контексты.
+        await matchService.EnsureCanDeleteAsync(id, cancellationToken);
+        await feeService.EnsureMatchChargesRemovableAsync(id, cancellationToken);
+
+        await matchService.DeleteAsync(id, cancellationToken);
+        await feeService.RemoveMatchChargesAsync(id, cancellationToken);
+        await accountService.RevokeMatchAssignmentsAsync(currentUser.TenantId, id, cancellationToken);
+
+        return NoContent();
+    }
+
     // Батч событий протокола, включая смену статуса матча. Идемпотентно по клиентскому UUID:
     // повторы из офлайн-очереди не создают дублей и возвращаются в duplicateEventIds.
     [HttpPost("{id:guid}/events")]

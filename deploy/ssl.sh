@@ -9,7 +9,7 @@
 #
 # Сертификаты:
 #   stathub — статхаб.рф, www, admin (обычный, 90 дней; DNS доменов должен указывать на этот сервер)
-#   ip      — 91.206.92.28 (профиль shortlived, ~6 дней; нужен certbot >= 5.4)
+#   ip      — 91.206.92.250 (профиль shortlived, ~6 дней; нужен certbot >= 5.4)
 #
 # Продление — сервис certbot в docker-compose.yml (раз в 12 ч), nginx перечитывает сертификаты раз в 6 ч.
 # Файлы — в ./certbot/conf (в git не хранятся). Certbot пишет их от root с правами 700 на live/ и archive/,
@@ -18,7 +18,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-SERVER_IP=91.206.92.28
+SERVER_IP=91.206.92.250
 
 # Имя сертификата → аргументы certbot.
 declare -A CERTS=(
@@ -41,6 +41,14 @@ as_root() {
 
 ensure_one() {
     local name=$1
+    # Сертификат на IP выпущен для другого адреса (сервер сменил IP) — сбрасываем на временный,
+    # issue выпустит новый. Для какого IP выпущен — записано в /c/.issued-ip.
+    if [ "$name" = ip ] \
+        && ! as_root alpine:3.20 test -f "/c/.dummy-ip" \
+        && ! as_root alpine:3.20 grep -qxF "$SERVER_IP" /c/.issued-ip; then
+        echo "[ip] сертификат выпущен не для $SERVER_IP — перевыпускаю"
+        as_root alpine:3.20 rm -rf /c/live/ip /c/archive/ip /c/renewal/ip.conf
+    fi
     if as_root alpine:3.20 test -f "/c/live/$name/fullchain.pem"; then
         return 0
     fi
@@ -72,6 +80,9 @@ issue_one() {
         as_root alpine:3.20 rm -f "/c/.dummy-$name"
         if [ -n "${RENEW_BEFORE[$name]:-}" ]; then
             as_root alpine:3.20 sed -i "1i renew_before_expiry = ${RENEW_BEFORE[$name]}" "/c/renewal/$name.conf"
+        fi
+        if [ "$name" = ip ]; then
+            as_root alpine:3.20 sh -c "echo '$SERVER_IP' > /c/.issued-ip"
         fi
         echo "[$name] сертификат Let's Encrypt выпущен"
     else

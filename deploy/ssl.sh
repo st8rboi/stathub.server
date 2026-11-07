@@ -1,76 +1,96 @@
 #!/usr/bin/env bash
-# HTTPS-сертификат Let's Encrypt для nginx. Запускается из ~/stathub; CI вызывает его сам при деплое.
+# HTTPS-сертификаты Let's Encrypt для nginx. Запускается из ~/stathub; CI вызывает его сам при деплое.
 #
-#   bash ssl.sh ensure  — если сертификата ещё нет, положить временный самоподписанный,
-#                         иначе nginx с ssl-конфигом не стартует. Ничего не делает, если сертификат есть.
-#   bash ssl.sh issue   — заменить временный сертификат настоящим. Нужны запущенный nginx (отвечает на
-#                         проверку по http://.../.well-known/acme-challenge/) и DNS всех доменов на этот сервер.
-#                         Ничего не делает, если сертификат уже настоящий.
+#   bash ssl.sh ensure  — для каждого сертификата, которого ещё нет, положить временный самоподписанный,
+#                         иначе nginx с ssl-конфигом не стартует. Существующие не трогает.
+#   bash ssl.sh issue   — заменить временные сертификаты настоящими. Нужен запущенный nginx (отвечает на
+#                         проверку по http://.../.well-known/acme-challenge/). Уже настоящие не трогает.
+#                         Сертификаты выпускаются независимо: неудача одного не мешает другому.
 #
-# Продление — сервис certbot в docker-compose.yml (раз в 12 ч), nginx перечитывает сертификат раз в 6 ч.
+# Сертификаты:
+#   stathub — статхаб.рф, www, admin (обычный, 90 дней; DNS доменов должен указывать на этот сервер)
+#   ip      — 91.206.92.28 (профиль shortlived, ~6 дней; нужен certbot >= 5.4)
+#
+# Продление — сервис certbot в docker-compose.yml (раз в 12 ч), nginx перечитывает сертификаты раз в 6 ч.
 # Файлы — в ./certbot/conf (в git не хранятся). Certbot пишет их от root с правами 700 на live/ и archive/,
 # поэтому все проверки и правки там делаются через одноразовый контейнер от root, а не от пользователя.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-NAME=stathub
-DOMAINS=(
-    xn--80aad5dfbv.xn--p1ai        # статхаб.рф
-    www.xn--80aad5dfbv.xn--p1ai    # www.статхаб.рф
-    admin.xn--80aad5dfbv.xn--p1ai  # admin.статхаб.рф
+SERVER_IP=91.206.92.28
+
+# Имя сертификата → аргументы certbot.
+declare -A CERTS=(
+    [stathub]="-d xn--80aad5dfbv.xn--p1ai -d www.xn--80aad5dfbv.xn--p1ai -d admin.xn--80aad5dfbv.xn--p1ai"
+    [ip]="--ip-address $SERVER_IP --preferred-profile shortlived"
 )
 
-# Внутри вспомогательного контейнера certbot/conf смонтирован в /c.
-LIVE="/c/live/$NAME"
-DUMMY_MARK="/c/.dummy-$NAME"
+# Когда продлевать (renew_before_expiry в renewal/<имя>.conf). По умолчанию certbot продлевает за 30 дней —
+# для 6-дневного сертификата это означало бы перевыпуск на каждом запуске (раз в 12 ч) и упор в лимиты
+# Let's Encrypt. 3 дня → перевыпуск примерно раз в 3 дня, с запасом на сбои.
+declare -A RENEW_BEFORE=(
+    [ip]="3 days"
+)
 
-# Выполнить команду sh от root с доступом к certbot/conf (образ alpine:3.20 уже есть — его использует backup.sh).
+# Выполнить команду от root с доступом к certbot/conf (смонтирован в /c).
+# Образ alpine:3.20 уже есть на сервере — его использует backup.sh.
 as_root() {
     docker run --rm -v "$PWD/certbot/conf:/c" "$@"
 }
 
-ensure() {
-    mkdir -p certbot/conf certbot/www
-    if as_root alpine:3.20 test -f "$LIVE/fullchain.pem"; then
+ensure_one() {
+    local name=$1
+    if as_root alpine:3.20 test -f "/c/live/$name/fullchain.pem"; then
         return 0
     fi
-    echo "Сертификата нет — создаю временный самоподписанный"
+    echo "[$name] сертификата нет — создаю временный самоподписанный"
     local tmp
     tmp="$(mktemp -d)"
     openssl req -x509 -nodes -newkey rsa:2048 -days 7 -subj "/CN=localhost" \
         -keyout "$tmp/privkey.pem" -out "$tmp/fullchain.pem" 2>/dev/null
-    as_root -v "$tmp:/t:ro" alpine:3.20 \
-        sh -c "mkdir -p '$LIVE' && cp /t/privkey.pem /t/fullchain.pem '$LIVE/' && touch '$DUMMY_MARK'"
+    as_root -v "$tmp:/t:ro" alpine:3.20 sh -c \
+        "mkdir -p /c/live/$name && cp /t/privkey.pem /t/fullchain.pem /c/live/$name/ && touch /c/.dummy-$name"
     rm -rf "$tmp"
 }
 
-issue() {
-    if ! as_root alpine:3.20 test -f "$DUMMY_MARK"; then
-        echo "Сертификат Let's Encrypt уже выпущен"
+issue_one() {
+    local name=$1
+    if ! as_root alpine:3.20 test -f "/c/.dummy-$name"; then
+        echo "[$name] сертификат Let's Encrypt уже выпущен"
         return 0
     fi
 
-    local args=()
-    for d in "${DOMAINS[@]}"; do args+=(-d "$d"); done
-
     # certbot не выпускает сертификат поверх чужих файлов в live/ — убираем временный.
     # nginx продолжает работать: старый сертификат уже загружен в память.
-    as_root alpine:3.20 rm -rf "$LIVE" "/c/archive/$NAME" "/c/renewal/$NAME.conf"
+    as_root alpine:3.20 rm -rf "/c/live/$name" "/c/archive/$name" "/c/renewal/$name.conf"
 
+    # shellcheck disable=SC2086  # аргументы из CERTS намеренно разбиваются по пробелам
     if docker compose run --rm --no-deps --entrypoint certbot certbot \
-        certonly --webroot -w /var/www/certbot \
-        --cert-name "$NAME" "${args[@]}" \
+        certonly --webroot -w /var/www/certbot --cert-name "$name" ${CERTS[$name]} \
         --agree-tos --register-unsafely-without-email --non-interactive; then
-        as_root alpine:3.20 rm -f "$DUMMY_MARK"
-        docker compose exec -T nginx nginx -s reload
-        echo "Сертификат Let's Encrypt выпущен"
+        as_root alpine:3.20 rm -f "/c/.dummy-$name"
+        if [ -n "${RENEW_BEFORE[$name]:-}" ]; then
+            as_root alpine:3.20 sed -i "1i renew_before_expiry = ${RENEW_BEFORE[$name]}" "/c/renewal/$name.conf"
+        fi
+        echo "[$name] сертификат Let's Encrypt выпущен"
     else
-        echo "Не удалось выпустить сертификат. Проверьте, что все домены указывают на этот сервер:" >&2
-        printf '  %s\n' "${DOMAINS[@]}" >&2
-        ensure   # вернуть временный, чтобы nginx мог перезапуститься
+        echo "[$name] не удалось выпустить сертификат (${CERTS[$name]})" >&2
+        ensure_one "$name"   # вернуть временный, чтобы nginx мог перезапуститься
         return 1
     fi
+}
+
+ensure() {
+    mkdir -p certbot/conf certbot/www
+    for name in "${!CERTS[@]}"; do ensure_one "$name"; done
+}
+
+issue() {
+    local failed=0
+    for name in "${!CERTS[@]}"; do issue_one "$name" || failed=1; done
+    docker compose exec -T nginx nginx -s reload
+    return "$failed"
 }
 
 case "${1:-}" in

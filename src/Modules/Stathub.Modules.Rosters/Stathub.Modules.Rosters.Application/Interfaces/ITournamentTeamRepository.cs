@@ -28,5 +28,8 @@ public interface ITournamentTeamRepository
 
     Task AddAsync(TournamentTeam tournamentTeam, CancellationToken cancellationToken = default);
 
+    /// <summary>Удаление заявки команды вместе с заявками игроков (каскад внутри модуля).</summary>
+    void Remove(TournamentTeam tournamentTeam);
+
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

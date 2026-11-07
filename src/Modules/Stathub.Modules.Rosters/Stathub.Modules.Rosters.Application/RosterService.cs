@@ -22,7 +22,8 @@ public sealed class RosterService(
     ITournamentTeamRepository repository,
     IStageInfoProvider stageInfo,
     ITeamExistsProvider teamExists,
-    IPlayerExistsProvider playerExists)
+    IPlayerExistsProvider playerExists,
+    IEnumerable<IRosterUsageSource> usageSources)
 {
     public async Task<Guid> AddTeamAsync(
         Guid stageId,
@@ -148,6 +149,80 @@ public sealed class RosterService(
         var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
         tournamentTeam.Withdraw(DateOnly.FromDateTime(DateTime.UtcNow));
 
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Смена игрового номера в активной заявке (null — без номера).</summary>
+    public async Task<PlayerRegistrationDto> ChangeSquadNumberAsync(
+        Guid stageId,
+        Guid tournamentTeamId,
+        Guid registrationId,
+        int? squadNumber,
+        CancellationToken cancellationToken = default)
+    {
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
+
+        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
+        var registration = tournamentTeam.ChangeSquadNumber(registrationId, squadNumber);
+
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return PlayerRegistrationDto.From(registration);
+    }
+
+    /// <summary>
+    /// Удаление ошибочной заявки игрока — только если по ней нет событий в матчах.
+    /// Обычный уход из команды — отзаявка или трансфер: они сохраняют историю.
+    /// </summary>
+    public async Task DeleteRegistrationAsync(
+        Guid stageId,
+        Guid tournamentTeamId,
+        Guid registrationId,
+        CancellationToken cancellationToken = default)
+    {
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
+
+        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
+        var registration = tournamentTeam.Registrations.FirstOrDefault(item => item.Id == registrationId)
+            ?? throw new NotFoundException($"Заявка '{registrationId}' не найдена в этой команде.");
+
+        var hasEvents = false;
+        foreach (var source in usageSources)
+        {
+            if (await source.PlayerHasEventsAsync(stageId, tournamentTeam.TeamId, registration.PlayerId, cancellationToken))
+            {
+                hasEvents = true;
+                break;
+            }
+        }
+
+        tournamentTeam.RemoveRegistration(registrationId, hasEvents);
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Удаление ошибочной заявки команды вместе с заявками игроков — только если у команды
+    /// нет матчей на этапе. Иначе команду снимают с этапа (история сохраняется).
+    /// </summary>
+    public async Task DeleteTeamAsync(
+        Guid stageId,
+        Guid tournamentTeamId,
+        CancellationToken cancellationToken = default)
+    {
+        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
+        EnsureRosterChangeable(stage);
+
+        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
+
+        var matchesCount = 0;
+        foreach (var source in usageSources)
+            matchesCount += await source.CountTeamMatchesAsync(stageId, tournamentTeam.TeamId, cancellationToken);
+
+        TournamentTeam.EnsureCanDelete(matchesCount);
+
+        repository.Remove(tournamentTeam);
         await repository.SaveChangesAsync(cancellationToken);
     }
 

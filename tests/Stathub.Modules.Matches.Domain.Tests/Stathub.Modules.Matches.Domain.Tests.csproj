@@ -15,6 +15,9 @@
     <ProjectReference Include="..\..\src\Modules\Stathub.Modules.Matches\Stathub.Modules.Matches.Domain\Stathub.Modules.Matches.Domain.csproj" />
     <ProjectReference Include="..\..\src\Modules\Stathub.Modules.Standings\Stathub.Modules.Standings.Domain\Stathub.Modules.Standings.Domain.csproj" />
     <ProjectReference Include="..\..\src\Modules\Stathub.Modules.Teams\Stathub.Modules.Teams.Domain\Stathub.Modules.Teams.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Stathub.Modules.Players\Stathub.Modules.Players.Domain\Stathub.Modules.Players.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Stathub.Modules.Leagues\Stathub.Modules.Leagues.Domain\Stathub.Modules.Leagues.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Stathub.Modules.Rosters\Stathub.Modules.Rosters.Domain\Stathub.Modules.Rosters.Domain.csproj" />
   </ItemGroup>
 
 </Project>

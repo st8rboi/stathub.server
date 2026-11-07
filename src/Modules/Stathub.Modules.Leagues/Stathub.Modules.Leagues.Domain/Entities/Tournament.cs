@@ -59,6 +59,68 @@ public sealed class Tournament : AggregateRoot
         return new Tournament(Guid.NewGuid(), leagueId, name.Trim(), startDate, endDate);
     }
 
+    /// <summary>Изменение названия и дат турнира.</summary>
+    public void Update(string name, DateOnly startDate, DateOnly? endDate)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DomainException("Название турнира обязательное поле.");
+
+        if (endDate is not null && endDate < startDate)
+            throw new DomainException("Дата окончания турнира не может быть раньше даты начала.");
+
+        Name = name.Trim();
+        StartDate = startDate;
+        EndDate = endDate;
+    }
+
+    /// <summary>
+    /// Изменение этапа. Название меняется всегда. Правила — только пока турнир не начат и
+    /// в этапе нет матчей: матч копирует формат при создании, а очки сразу пересчитывают таблицу.
+    /// </summary>
+    public Stage UpdateStage(
+        Guid stageId,
+        string name,
+        StageFormatType formatType,
+        PointsRule pointsRule,
+        MatchFormatRule matchFormatRule,
+        bool stageHasMatches)
+    {
+        var stage = GetStage(stageId);
+
+        if (stage.HasDifferentRules(formatType, pointsRule, matchFormatRule))
+        {
+            if (Status != TournamentStatus.Scheduled)
+                throw new ConflictException(
+                    "Правила этапа можно менять только до начала турнира. Изменить можно только название.");
+
+            if (stageHasMatches)
+                throw new ConflictException(
+                    "Правила этапа нельзя менять: в нём уже есть матчи. Изменить можно только название.");
+        }
+
+        stage.Update(name, formatType, pointsRule, matchFormatRule);
+        return stage;
+    }
+
+    /// <summary>
+    /// Удаление этапа. Проверка ссылок (заявки, матчи) — на вызывающем: они живут в других модулях.
+    /// Оставшиеся этапы перенумеровываются, чтобы порядок шёл без пропусков.
+    /// </summary>
+    public void RemoveStage(Guid stageId)
+    {
+        var stage = GetStage(stageId);
+
+        _stages.Remove(stage);
+
+        var order = 1;
+        foreach (var remaining in _stages.OrderBy(s => s.Order))
+            remaining.SetOrder(order++);
+    }
+
+    private Stage GetStage(Guid stageId) =>
+        _stages.FirstOrDefault(s => s.Id == stageId)
+        ?? throw new NotFoundException($"Этап '{stageId}' не найден в турнире '{Id}'.");
+
     public void Start()
     {
         if (Status != TournamentStatus.Scheduled)

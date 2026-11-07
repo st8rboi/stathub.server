@@ -23,6 +23,30 @@ internal sealed class TournamentReader(
         return new TournamentStatusInfoDto(tournament.Id, tournament.LeagueId, rosterLocked);
     }
 
+    public async Task<IReadOnlyList<Guid>> GetOrganizerIdsAsync(
+        IReadOnlyCollection<Guid> tournamentIds,
+        CancellationToken cancellationToken = default)
+    {
+        // Турниров у одной команды/игрока единицы, поэтому отдельный пакетный запрос не нужен.
+        var leagueIds = new HashSet<Guid>();
+        foreach (var tournamentId in tournamentIds.Distinct())
+        {
+            var tournament = await repository.GetByIdAsync(tournamentId, cancellationToken);
+            if (tournament is not null)
+                leagueIds.Add(tournament.LeagueId);
+        }
+
+        var organizerIds = new HashSet<Guid>();
+        foreach (var leagueId in leagueIds)
+        {
+            var league = await leagueRepository.GetByIdAsync(leagueId, cancellationToken);
+            if (league is not null)
+                organizerIds.Add(league.OrganizerId);
+        }
+
+        return organizerIds.ToList();
+    }
+
     public async Task<TournamentPublicInfoDto?> GetPublicInfoAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default)

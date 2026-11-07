@@ -67,9 +67,16 @@ public sealed class Team : AggregateRoot
     /// <summary>
     /// Переименование клуба. История матчей не страдает: матчи ссылаются на Id команды,
     /// а не на её название.
+    /// <para>
+    /// Команда общая для всех организаторов, поэтому, как и с логотипом, править её может только
+    /// организатор, в чьих лигах она одна используется; иначе — через техподдержку.
+    /// <paramref name="usedByOrganizerIds"/> — организаторы, в турнирах которых команда заявлена или играла.
+    /// </para>
     /// </summary>
-    public void Rename(string name, string? city)
+    public void Rename(string name, string? city, Guid tenantId, IReadOnlyCollection<Guid> usedByOrganizerIds)
     {
+        EnsureCanEdit(tenantId, usedByOrganizerIds);
+
         if (string.IsNullOrWhiteSpace(name))
             throw new DomainException("Название команды обязательное поле.");
 
@@ -83,6 +90,14 @@ public sealed class Team : AggregateRoot
 
         Name = normalizedName;
         City = normalizedCity;
+    }
+
+    /// <summary>Править можно команду, которая не используется в лигах других организаторов.</summary>
+    public static void EnsureCanEdit(Guid tenantId, IReadOnlyCollection<Guid> usedByOrganizerIds)
+    {
+        if (usedByOrganizerIds.Any(organizerId => organizerId != tenantId))
+            throw new ForbiddenException(
+                "Команда используется в лигах других организаторов. Изменить её можно через техподдержку.");
     }
 
     /// <summary>Логотип без владельца свободен; занятый может менять только его владелец.</summary>

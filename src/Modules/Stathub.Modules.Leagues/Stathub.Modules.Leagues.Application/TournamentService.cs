@@ -7,7 +7,10 @@ using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Leagues.Application;
 
-public sealed class TournamentService(ITournamentRepository repository, ILeagueRepository leagueRepository)
+public sealed class TournamentService(
+    ITournamentRepository repository,
+    ILeagueRepository leagueRepository,
+    IEnumerable<ICompetitionUsageSource> usageSources)
 {
     public async Task<Guid> CreateTournamentAsync(
         Guid leagueId,
@@ -67,6 +70,110 @@ public sealed class TournamentService(ITournamentRepository repository, ILeagueR
         await repository.SaveChangesAsync(cancellationToken);
 
         return stage.Id;
+    }
+
+    public async Task<TournamentDto> UpdateAsync(
+        Guid leagueId,
+        Guid tournamentId,
+        string name,
+        DateOnly startDate,
+        DateOnly? endDate,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
+
+        tournament.Update(name, startDate, endDate);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return TournamentDto.From(tournament);
+    }
+
+    /// <summary>
+    /// Удаление турнира вместе с этапами. Только если в нём нет заявок и матчей: они живут
+    /// в других модулях, и без FK удаление оставило бы их «висящими».
+    /// </summary>
+    public async Task DeleteAsync(Guid leagueId, Guid tournamentId, CancellationToken cancellationToken = default)
+    {
+        var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
+
+        var usages = new List<string>();
+        foreach (var source in usageSources)
+        {
+            var usage = await source.GetTournamentUsageAsync(tournamentId, cancellationToken);
+            if (usage is not null)
+                usages.Add(usage);
+        }
+
+        if (usages.Count > 0)
+            throw new ConflictException(
+                $"Турнир нельзя удалить: в нём есть данные ({string.Join(", ", usages)}). Его можно отменить.");
+
+        repository.Remove(tournament);
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<StageDto> UpdateStageAsync(
+        Guid leagueId,
+        Guid tournamentId,
+        Guid stageId,
+        string name,
+        StageFormatType formatType,
+        int winPoints,
+        int drawPoints,
+        int lossPoints,
+        int periodDurationMinutes,
+        int periodsCount,
+        bool extraTimeEnabled,
+        bool penaltyShootoutEnabled,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
+
+        var pointsRule = new PointsRule(winPoints, drawPoints, lossPoints);
+        var matchFormatRule = new MatchFormatRule(periodDurationMinutes, periodsCount, extraTimeEnabled, penaltyShootoutEnabled);
+
+        var hasMatches = false;
+        foreach (var source in usageSources)
+        {
+            if (await source.StageHasMatchesAsync(stageId, cancellationToken))
+            {
+                hasMatches = true;
+                break;
+            }
+        }
+
+        var stage = tournament.UpdateStage(stageId, name, formatType, pointsRule, matchFormatRule, hasMatches);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return StageDto.From(stage);
+    }
+
+    /// <summary>Удаление этапа без заявок и матчей; остальные этапы перенумеровываются.</summary>
+    public async Task DeleteStageAsync(
+        Guid leagueId,
+        Guid tournamentId,
+        Guid stageId,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
+
+        if (tournament.Stages.All(stage => stage.Id != stageId))
+            throw new NotFoundException($"Этап '{stageId}' не найден в турнире '{tournamentId}'.");
+
+        var usages = new List<string>();
+        foreach (var source in usageSources)
+        {
+            var usage = await source.GetStageUsageAsync(stageId, cancellationToken);
+            if (usage is not null)
+                usages.Add(usage);
+        }
+
+        if (usages.Count > 0)
+            throw new ConflictException(
+                $"Этап нельзя удалить: в нём есть данные ({string.Join(", ", usages)}).");
+
+        tournament.RemoveStage(stageId);
+        await repository.SaveChangesAsync(cancellationToken);
     }
 
     public Task StartAsync(Guid leagueId, Guid tournamentId, CancellationToken cancellationToken = default) =>

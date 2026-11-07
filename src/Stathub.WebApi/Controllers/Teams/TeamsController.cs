@@ -61,6 +61,31 @@ public sealed class TeamsController(
     public async Task<ActionResult<TeamDto>> GetTeamById(Guid id, CancellationToken cancellationToken) =>
         Ok(await teamService.GetByIdAsync(id, cancellationToken));
 
+    /// <summary>
+    /// Изменение названия и города. 403 — команда используется в лигах других организаторов
+    /// (правка через техподдержку, как с логотипом).
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<ActionResult<TeamDto>> UpdateTeam(
+        Guid id,
+        UpdateTeamRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await teamService.UpdateAsync(id, request.Name, request.City, currentUser.TenantId, cancellationToken));
+
+    /// <summary>Удаление команды. 409 — команда уже есть в заявках или матчах.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<IActionResult> DeleteTeam(Guid id, CancellationToken cancellationToken)
+    {
+        var logoUrl = await teamService.DeleteAsync(id, cancellationToken);
+
+        // Команды в БД уже нет — файл логотипа больше никому не нужен.
+        await logoStorage.DeleteAsync(logoUrl, cancellationToken);
+
+        return NoContent();
+    }
+
     /// <summary>Загрузка логотипа команды: файл кладётся в хранилище, в БД — только путь.</summary>
     [HttpPost("{id:guid}/logo")]
     [Authorize(Policy = AuthPolicies.Organizer)]

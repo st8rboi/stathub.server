@@ -69,6 +69,58 @@ public sealed class TournamentsController(TournamentService tournamentService) :
         return Created($"leagues/{leagueId}/tournaments/{tournamentId}/stages/{stageId}", new { id = stageId });
     }
 
+    [HttpPut("{tournamentId:guid}")]
+    public async Task<ActionResult<TournamentDto>> UpdateTournament(
+        Guid leagueId,
+        Guid tournamentId,
+        UpdateTournamentRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await tournamentService.UpdateAsync(
+            leagueId, tournamentId, request.Name, request.StartDate, request.EndDate, cancellationToken));
+
+    /// <summary>Удаление турнира с этапами. 409 — в турнире есть заявки или матчи (его можно отменить).</summary>
+    [HttpDelete("{tournamentId:guid}")]
+    public async Task<IActionResult> DeleteTournament(Guid leagueId, Guid tournamentId, CancellationToken cancellationToken)
+    {
+        await tournamentService.DeleteAsync(leagueId, tournamentId, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Изменение этапа. 409 — смена правил после старта турнира или при наличии матчей.</summary>
+    [HttpPut("{tournamentId:guid}/stages/{stageId:guid}")]
+    public async Task<ActionResult<StageDto>> UpdateStage(
+        Guid leagueId,
+        Guid tournamentId,
+        Guid stageId,
+        UpdateStageRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await tournamentService.UpdateStageAsync(
+            leagueId,
+            tournamentId,
+            stageId,
+            request.Name,
+            request.FormatType,
+            request.WinPoints,
+            request.DrawPoints,
+            request.LossPoints,
+            request.PeriodDurationMinutes,
+            request.PeriodsCount,
+            request.ExtraTimeEnabled,
+            request.PenaltyShootoutEnabled,
+            cancellationToken));
+
+    /// <summary>Удаление этапа. 409 — в этапе есть заявки или матчи.</summary>
+    [HttpDelete("{tournamentId:guid}/stages/{stageId:guid}")]
+    public async Task<IActionResult> DeleteStage(
+        Guid leagueId,
+        Guid tournamentId,
+        Guid stageId,
+        CancellationToken cancellationToken)
+    {
+        await tournamentService.DeleteStageAsync(leagueId, tournamentId, stageId, cancellationToken);
+        return NoContent();
+    }
+
     [HttpPost("{tournamentId:guid}/start")]
     public async Task<IActionResult> StartTournament(Guid leagueId, Guid tournamentId, CancellationToken cancellationToken)
     {

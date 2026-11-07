@@ -14,7 +14,7 @@ namespace Stathub.WebApi.Controllers.Rosters;
 [ApiController]
 [Route("stages/{stageId:guid}")]
 // Читать заявки может и судья (состав нужен для автора гола) — доступ проверяет фильтр.
-// Запись — только организатору (см. атрибуты на POST ниже).
+// Запись — только организатору (см. атрибуты на POST/PUT/DELETE ниже).
 [Authorize(Policy = AuthPolicies.TenantMember)]
 [ServiceFilter(typeof(StageRosterAccessFilter))]
 public sealed class RostersController(RosterService rosterService) : ControllerBase
@@ -74,6 +74,40 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
         CancellationToken cancellationToken)
     {
         await rosterService.ReleasePlayerAsync(stageId, id, registrationId, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Смена игрового номера в активной заявке.</summary>
+    [HttpPut("teams/{id:guid}/players/{registrationId:guid}/squad-number")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<ActionResult<PlayerRegistrationDto>> ChangeSquadNumber(
+        Guid stageId,
+        Guid id,
+        Guid registrationId,
+        ChangeSquadNumberRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await rosterService.ChangeSquadNumberAsync(
+            stageId, id, registrationId, request.SquadNumber, cancellationToken));
+
+    /// <summary>Удаление ошибочной заявки игрока. 409 — по ней уже есть события в матчах (отзаявите).</summary>
+    [HttpDelete("teams/{id:guid}/players/{registrationId:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<IActionResult> DeleteRegistration(
+        Guid stageId,
+        Guid id,
+        Guid registrationId,
+        CancellationToken cancellationToken)
+    {
+        await rosterService.DeleteRegistrationAsync(stageId, id, registrationId, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Удаление ошибочной заявки команды. 409 — у команды есть матчи на этапе (снимите с этапа).</summary>
+    [HttpDelete("teams/{id:guid}")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<IActionResult> DeleteTeam(Guid stageId, Guid id, CancellationToken cancellationToken)
+    {
+        await rosterService.DeleteTeamAsync(stageId, id, cancellationToken);
         return NoContent();
     }
 

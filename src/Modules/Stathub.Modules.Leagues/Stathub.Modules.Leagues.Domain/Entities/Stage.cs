@@ -63,6 +63,42 @@ public sealed class Stage : Entity
         return new Stage(Guid.NewGuid(), tournamentId, order, name.Trim(), formatType, pointsRule, matchFormatRule);
     }
 
+    internal bool HasDifferentRules(
+        StageFormatType formatType,
+        PointsRule pointsRule,
+        MatchFormatRule matchFormatRule) =>
+        FormatType != formatType || PointsRule != pointsRule || MatchFormatRule != matchFormatRule;
+
+    /// <summary>Правка этапа; когда её можно делать, решает агрегат <see cref="Tournament"/>.</summary>
+    internal void Update(
+        string name,
+        StageFormatType formatType,
+        PointsRule pointsRule,
+        MatchFormatRule matchFormatRule)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DomainException("Название этапа обязательное поле.");
+
+        if (!Enum.IsDefined(formatType))
+            throw new DomainException($"Неизвестный формат этапа '{formatType}'.");
+
+        ArgumentNullException.ThrowIfNull(pointsRule);
+        ArgumentNullException.ThrowIfNull(matchFormatRule);
+
+        Name = name.Trim();
+        FormatType = formatType;
+
+        // Value object заменяем, только если он действительно изменился: EF отслеживает owned-типы
+        // по ссылке, и без нужды подменять их не стоит.
+        if (PointsRule != pointsRule)
+            PointsRule = pointsRule;
+
+        if (MatchFormatRule != matchFormatRule)
+            MatchFormatRule = matchFormatRule;
+    }
+
+    internal void SetOrder(int order) => Order = order;
+
     public StageTiebreakerRule AddTiebreakerRule(int priority, TiebreakerCriterion criterion)
     {
         if (_tiebreakerRules.Any(r => r.Priority == priority))

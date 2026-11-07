@@ -24,6 +24,8 @@ internal sealed class TournamentRepository(LeaguesDbContext dbContext) : ITourna
     public async Task AddAsync(Tournament tournament, CancellationToken cancellationToken = default) =>
         await dbContext.Tournaments.AddAsync(tournament, cancellationToken);
 
+    public void Remove(Tournament tournament) => dbContext.Tournaments.Remove(tournament);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);
 }

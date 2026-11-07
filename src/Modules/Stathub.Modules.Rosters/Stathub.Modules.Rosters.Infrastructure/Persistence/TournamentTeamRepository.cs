@@ -53,6 +53,8 @@ internal sealed class TournamentTeamRepository(RostersDbContext dbContext) : ITo
     public async Task AddAsync(TournamentTeam tournamentTeam, CancellationToken cancellationToken = default) =>
         await dbContext.TournamentTeams.AddAsync(tournamentTeam, cancellationToken);
 
+    public void Remove(TournamentTeam tournamentTeam) => dbContext.TournamentTeams.Remove(tournamentTeam);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);
 }

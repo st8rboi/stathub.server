@@ -59,6 +59,30 @@ public sealed class LeaguesController(
         return Ok(league);
     }
 
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<LeagueDto>> UpdateLeague(
+        Guid id,
+        UpdateLeagueRequest request,
+        CancellationToken cancellationToken)
+    {
+        await GetOwnedLeagueAsync(id, cancellationToken);
+
+        return Ok(await leagueService.UpdateAsync(
+            id, request.Name, request.Slug, request.City, request.Region, cancellationToken));
+    }
+
+    /// <summary>Удаление пустой лиги. 409 — в лиге есть турниры (их можно удалить или архивировать лигу).</summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteLeague(Guid id, CancellationToken cancellationToken)
+    {
+        await GetOwnedLeagueAsync(id, cancellationToken);
+
+        var logoUrl = await leagueService.DeleteAsync(id, cancellationToken);
+        await logoStorage.DeleteAsync(logoUrl, cancellationToken);
+
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/publish")]
     public async Task<IActionResult> PublishLeague(Guid id, CancellationToken cancellationToken)
     {

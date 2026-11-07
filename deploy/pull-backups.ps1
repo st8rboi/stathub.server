@@ -2,7 +2,7 @@
 # Качает только файлы, которых ещё нет локально; локальные копии старше KeepDays удаляет.
 # Лог: <Dest>\pull.log
 param(
-    [string]$Server   = 'shadmin@91.206.92.28',
+    [string]$Server   = 'shadmin@91.206.92.250',
     [string]$Key      = "$HOME\.ssh\stathub_backup",
     [string]$Dest     = "$HOME\Backups\stathub",
     [int]   $KeepDays = 60

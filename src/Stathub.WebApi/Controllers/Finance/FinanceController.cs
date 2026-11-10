@@ -4,6 +4,8 @@ using Stathub.Modules.Finance.Application;
 using Stathub.Modules.Finance.Application.Dtos;
 using Stathub.Modules.Finance.Domain.Enums;
 using Stathub.Modules.Identity.Application.Interfaces;
+using Stathub.Modules.Leagues.Application.Interfaces;
+using Stathub.Shared.Exceptions;
 using Stathub.WebApi.Infrastructure.Auth;
 
 namespace Stathub.WebApi.Controllers.Finance;
@@ -16,8 +18,16 @@ public sealed record PayChargeRequest(PaymentMethod Method, string? Comment);
 
 public sealed record CancelChargeRequest(string? Comment);
 
+public sealed record AddManualChargeRequest(
+    Guid TeamId,
+    Guid? StageId,
+    ChargeKind Kind,
+    int Amount,
+    string? Description);
+
 /// <summary>
-/// Взносы за матчи: тариф на турнир/этап, начисления по командам и отметка оплаты.
+/// Взносы: тариф за матч на турнир/этап, ручные начисления командам (вступительный взнос, штраф),
+/// начисления по командам и отметка оплаты.
 /// Всё под политикой организатора и проверкой владения турниром/этапом.
 /// </summary>
 [ApiController]
@@ -26,6 +36,7 @@ public sealed record CancelChargeRequest(string? Comment);
 public sealed class FinanceController(
     FeeService feeService,
     TenantOwnershipGuard ownershipGuard,
+    IStagePublicReader stageReader,
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpGet("tournaments/{tournamentId:guid}/settings")]
@@ -71,6 +82,39 @@ public sealed class FinanceController(
         [FromQuery] bool onlyDebt,
         CancellationToken cancellationToken) =>
         Ok(await feeService.ListStageChargesAsync(stageId, onlyDebt, cancellationToken));
+
+    /// <summary>Все начисления турнира, включая ручные без этапа.</summary>
+    [HttpGet("tournaments/{tournamentId:guid}/charges")]
+    [ServiceFilter(typeof(OwnedTournamentFilter))]
+    public async Task<ActionResult<IReadOnlyList<ChargeDto>>> ListTournamentCharges(
+        Guid tournamentId,
+        [FromQuery] bool onlyDebt,
+        CancellationToken cancellationToken) =>
+        Ok(await feeService.ListTournamentChargesAsync(tournamentId, onlyDebt, cancellationToken));
+
+    /// <summary>Ручное начисление команде в турнире (этап — по желанию).</summary>
+    [HttpPost("tournaments/{tournamentId:guid}/charges")]
+    [ServiceFilter(typeof(OwnedTournamentFilter))]
+    public async Task<ActionResult<object>> AddManualCharge(
+        Guid tournamentId,
+        AddManualChargeRequest request,
+        CancellationToken cancellationToken)
+    {
+        // Этап из тела запроса: проверяем, что он из этого турнира, иначе начисление «уедет» в чужой.
+        if (request.StageId is { } stageId)
+        {
+            var stage = await stageReader.GetAsync(stageId, cancellationToken);
+            if (stage is null || stage.TournamentId != tournamentId)
+                throw new NotFoundException($"Этап '{stageId}' не найден в турнире.");
+        }
+
+        var id = await feeService.AddManualChargeAsync(
+            tournamentId,
+            new AddManualChargeDto(request.TeamId, request.StageId, request.Kind, request.Amount, request.Description),
+            cancellationToken);
+
+        return Ok(new { id });
+    }
 
     [HttpPost("charges/{id:guid}/pay")]
     public async Task<IActionResult> Pay(

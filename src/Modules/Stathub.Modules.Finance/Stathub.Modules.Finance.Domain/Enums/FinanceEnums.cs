@@ -28,6 +28,25 @@ public enum PaymentMethod
     Bank = 2
 }
 
+/// <summary>
+/// Вид начисления. Взнос за матч создаётся автоматически при создании матча,
+/// остальные организатор выставляет команде вручную.
+/// </summary>
+public enum ChargeKind
+{
+    /// <summary>Взнос за матч по тарифу турнира/этапа.</summary>
+    MatchFee = 0,
+
+    /// <summary>Вступительный (заявочный) взнос команды.</summary>
+    EntryFee = 1,
+
+    /// <summary>Штраф (неявка, нарушения и т. п.).</summary>
+    Fine = 2,
+
+    /// <summary>Прочее — смысл в описании.</summary>
+    Other = 3
+}
+
 /// <summary>Сторона матча, с которой выставлен взнос.</summary>
 public enum ChargeSide
 {

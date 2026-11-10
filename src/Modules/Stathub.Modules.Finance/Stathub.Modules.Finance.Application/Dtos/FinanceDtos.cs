@@ -10,11 +10,13 @@ public sealed record FeeSettingsDto(
 
 public sealed record ChargeDto(
     Guid Id,
-    Guid MatchId,
-    Guid StageId,
+    Guid? MatchId,
+    Guid? StageId,
     Guid TeamId,
     string TeamName,
-    ChargeSide Side,
+    ChargeSide? Side,
+    ChargeKind Kind,
+    string? Description,
     int Amount,
     ChargeStatus Status,
     DateTime CreatedAtUtc,
@@ -22,13 +24,29 @@ public sealed record ChargeDto(
     PaymentMethod? PaymentMethod,
     string? Comment);
 
-/// <summary>Сводка по турниру или этапу.</summary>
+/// <summary>Сводка по турниру или этапу; <see cref="ByKind"/> — та же сводка в разрезе видов начислений.</summary>
 public sealed record FeeSummaryDto(
     int Charged,
     int Paid,
     int Debt,
     int PendingCount,
-    int PaidCount);
+    int PaidCount,
+    IReadOnlyList<ChargeKindSummaryDto> ByKind);
+
+/// <summary>Итоги по одному виду начислений (только виды, по которым что-то начислено).</summary>
+public sealed record ChargeKindSummaryDto(
+    ChargeKind Kind,
+    int Charged,
+    int Paid,
+    int Debt);
+
+/// <summary>Ручное начисление команде: вступительный взнос, штраф или прочее.</summary>
+public sealed record AddManualChargeDto(
+    Guid TeamId,
+    Guid? StageId,
+    ChargeKind Kind,
+    int Amount,
+    string? Description);
 
 /// <summary>Долг одной команды за турнир.</summary>
 public sealed record TeamDebtDto(

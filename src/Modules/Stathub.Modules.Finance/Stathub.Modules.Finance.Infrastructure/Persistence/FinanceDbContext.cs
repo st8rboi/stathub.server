@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Stathub.Modules.Finance.Domain.Entities;
+using Stathub.Modules.Finance.Domain.Enums;
 
 namespace Stathub.Modules.Finance.Infrastructure.Persistence;
 
@@ -42,11 +43,19 @@ internal sealed class MatchChargeConfiguration : IEntityTypeConfiguration<MatchC
 
         builder.HasKey(charge => charge.Id);
         builder.Property(charge => charge.Id).ValueGeneratedNever();
-        builder.Property(charge => charge.MatchId).IsRequired();
-        builder.Property(charge => charge.StageId).IsRequired();
+        // Матч, сторона и этап есть только у взноса за матч; у ручного начисления этап необязателен.
+        builder.Property(charge => charge.MatchId);
+        builder.Property(charge => charge.StageId);
         builder.Property(charge => charge.TournamentId).IsRequired();
         builder.Property(charge => charge.TeamId).IsRequired();
-        builder.Property(charge => charge.Side).IsRequired().HasConversion<string>().HasMaxLength(10);
+        builder.Property(charge => charge.Side).HasConversion<string>().HasMaxLength(10);
+        // Значение по умолчанию — для строк, созданных до появления видов: все они взносы за матч.
+        builder.Property(charge => charge.Kind)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(ChargeKind.MatchFee);
+        builder.Property(charge => charge.Description).HasMaxLength(MatchCharge.DescriptionMaxLength);
         builder.Property(charge => charge.Amount).IsRequired();
         builder.Property(charge => charge.Status).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(charge => charge.CreatedAtUtc).IsRequired();

@@ -156,6 +156,29 @@ public sealed class FeeService(
         await charges.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Ручное начисление команде в турнире. Принадлежность этапа турниру и владение турниром
+    /// проверяет вызывающая сторона (контроллер) — у Finance нет доступа к структуре лиг.
+    /// </summary>
+    public async Task<Guid> AddManualChargeAsync(
+        Guid tournamentId,
+        AddManualChargeDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var charge = MatchCharge.CreateManual(
+            tournamentId,
+            request.StageId,
+            request.TeamId,
+            request.Kind,
+            request.Amount,
+            request.Description);
+
+        await charges.AddRangeAsync([charge], cancellationToken);
+        await charges.SaveChangesAsync(cancellationToken);
+
+        return charge.Id;
+    }
+
     public async Task<IReadOnlyList<ChargeDto>> ListStageChargesAsync(
         Guid stageId,
         bool onlyDebt,
@@ -173,6 +196,31 @@ public sealed class FeeService(
             .Select(charge => ToDto(charge, names))
             .OrderBy(charge => charge.CreatedAtUtc)
             .ThenBy(charge => charge.Side)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Все начисления турнира (взносы за матчи и ручные, в том числе без этапа).
+    /// Нужен, чтобы отметить оплату вступительного взноса или штрафа, выставленного на весь турнир.
+    /// </summary>
+    public async Task<IReadOnlyList<ChargeDto>> ListTournamentChargesAsync(
+        Guid tournamentId,
+        bool onlyDebt,
+        CancellationToken cancellationToken = default)
+    {
+        var list = await charges.ListByTournamentAsync(tournamentId, cancellationToken);
+        if (onlyDebt)
+            list = list.Where(charge => charge.Status == ChargeStatus.Pending).ToList();
+        if (list.Count == 0)
+            return [];
+
+        var names = await teamNames.GetNamesAsync(
+            list.Select(charge => charge.TeamId).Distinct().ToList(),
+            cancellationToken);
+
+        return list
+            .Select(charge => ToDto(charge, names))
+            .OrderByDescending(charge => charge.CreatedAtUtc)
             .ToList();
     }
 
@@ -224,12 +272,24 @@ public sealed class FeeService(
         var charged = active.Sum(charge => charge.Amount);
         var paid = active.Where(charge => charge.Status == ChargeStatus.Paid).Sum(charge => charge.Amount);
 
+        var byKind = active
+            .GroupBy(charge => charge.Kind)
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var kindCharged = group.Sum(charge => charge.Amount);
+                var kindPaid = group.Where(charge => charge.Status == ChargeStatus.Paid).Sum(charge => charge.Amount);
+                return new ChargeKindSummaryDto(group.Key, kindCharged, kindPaid, kindCharged - kindPaid);
+            })
+            .ToList();
+
         return new FeeSummaryDto(
             charged,
             paid,
             charged - paid,
             active.Count(charge => charge.Status == ChargeStatus.Pending),
-            active.Count(charge => charge.Status == ChargeStatus.Paid));
+            active.Count(charge => charge.Status == ChargeStatus.Paid),
+            byKind);
     }
 
     /// <summary>Долг по командам за турнир: кто сколько начислено, оплатил и остался должен.</summary>
@@ -293,6 +353,8 @@ public sealed class FeeService(
         charge.TeamId,
         names.GetValueOrDefault(charge.TeamId, string.Empty),
         charge.Side,
+        charge.Kind,
+        charge.Description,
         charge.Amount,
         charge.Status,
         charge.CreatedAtUtc,

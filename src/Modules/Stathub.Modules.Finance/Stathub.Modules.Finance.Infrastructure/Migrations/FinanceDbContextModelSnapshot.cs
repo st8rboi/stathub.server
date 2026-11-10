@@ -68,7 +68,18 @@ namespace Stathub.Modules.Finance.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("MatchId")
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("MatchFee");
+
+                    b.Property<Guid?>("MatchId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("PaidAtUtc")
@@ -79,11 +90,10 @@ namespace Stathub.Modules.Finance.Infrastructure.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.Property<string>("Side")
-                        .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
-                    b.Property<Guid>("StageId")
+                    b.Property<Guid?>("StageId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Status")

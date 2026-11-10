@@ -5,21 +5,34 @@ using Stathub.Shared.Exceptions;
 namespace Stathub.Modules.Finance.Domain.Entities;
 
 /// <summary>
-/// Начисление взноса за матч: по одному на каждую команду. Сумма фиксируется в момент
-/// создания матча — изменение тарифа не переписывает прошлое. Матч и команда хранятся
-/// по <c>Guid</c> (межмодульные FK запрещены).
+/// Начисление команде. Два вида происхождения:
+/// <list type="bullet">
+/// <item>взнос за матч (<see cref="ChargeKind.MatchFee"/>) — по одному на каждую команду матча,
+/// сумма фиксируется в момент создания матча, изменение тарифа не переписывает прошлое;</item>
+/// <item>ручное (вступительный взнос, штраф, прочее) — организатор выставляет команде в турнире,
+/// этап необязателен, матча и стороны нет.</item>
+/// </list>
+/// Матч, этап и команда хранятся по <c>Guid</c> (межмодульные FK запрещены).
 /// </summary>
 public sealed class MatchCharge : AggregateRoot
 {
-    public Guid MatchId { get; private set; }
+    /// <summary>Матч — только у взноса за матч.</summary>
+    public Guid? MatchId { get; private set; }
 
-    public Guid StageId { get; private set; }
+    /// <summary>Этап: у взноса за матч всегда, у ручного начисления — по желанию.</summary>
+    public Guid? StageId { get; private set; }
 
     public Guid TournamentId { get; private set; }
 
     public Guid TeamId { get; private set; }
 
-    public ChargeSide Side { get; private set; }
+    /// <summary>Сторона матча — только у взноса за матч.</summary>
+    public ChargeSide? Side { get; private set; }
+
+    public ChargeKind Kind { get; private set; }
+
+    /// <summary>Описание ручного начисления («Штраф за неявку 12.11»).</summary>
+    public string? Description { get; private set; }
 
     public int Amount { get; private set; }
 
@@ -39,11 +52,13 @@ public sealed class MatchCharge : AggregateRoot
 
     private MatchCharge(
         Guid id,
-        Guid matchId,
-        Guid stageId,
+        Guid? matchId,
+        Guid? stageId,
         Guid tournamentId,
         Guid teamId,
-        ChargeSide side,
+        ChargeSide? side,
+        ChargeKind kind,
+        string? description,
         int amount)
     {
         Id = id;
@@ -52,6 +67,8 @@ public sealed class MatchCharge : AggregateRoot
         TournamentId = tournamentId;
         TeamId = teamId;
         Side = side;
+        Kind = kind;
+        Description = description;
         Amount = amount;
         Status = ChargeStatus.Pending;
         CreatedAtUtc = DateTime.UtcNow;
@@ -70,7 +87,42 @@ public sealed class MatchCharge : AggregateRoot
         if (amount <= 0)
             throw new DomainException("Сумма начисления должна быть больше нуля.");
 
-        return new MatchCharge(Guid.NewGuid(), matchId, stageId, tournamentId, teamId, side, amount);
+        return new MatchCharge(
+            Guid.NewGuid(), matchId, stageId, tournamentId, teamId, side, ChargeKind.MatchFee, null, amount);
+    }
+
+    public const int DescriptionMaxLength = 200;
+
+    /// <summary>
+    /// Ручное начисление команде в турнире: вступительный взнос, штраф или прочее.
+    /// Взнос за матч вручную не выставляется — он создаётся вместе с матчем.
+    /// </summary>
+    public static MatchCharge CreateManual(
+        Guid tournamentId,
+        Guid? stageId,
+        Guid teamId,
+        ChargeKind kind,
+        int amount,
+        string? description)
+    {
+        if (tournamentId == Guid.Empty || teamId == Guid.Empty)
+            throw new DomainException("Турнир и команда обязательны.");
+        if (stageId == Guid.Empty)
+            throw new DomainException("Этап указан неверно.");
+        if (kind == ChargeKind.MatchFee)
+            throw new DomainException("Взнос за матч начисляется автоматически при создании матча.");
+        if (!Enum.IsDefined(kind))
+            throw new DomainException("Неизвестный вид начисления.");
+        if (amount <= 0)
+            throw new DomainException("Сумма начисления должна быть больше нуля.");
+
+        var text = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        if (text is { Length: > DescriptionMaxLength })
+            throw new DomainException($"Описание длиннее {DescriptionMaxLength} символов.");
+        if (kind == ChargeKind.Other && text is null)
+            throw new DomainException("Для прочего начисления укажите описание.");
+
+        return new MatchCharge(Guid.NewGuid(), null, stageId, tournamentId, teamId, null, kind, text, amount);
     }
 
     /// <summary>Организатор отметил оплату: взнос получен наличными, переводом или безналом.</summary>

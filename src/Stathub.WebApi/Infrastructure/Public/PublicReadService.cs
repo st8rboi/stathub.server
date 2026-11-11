@@ -7,6 +7,9 @@ using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Domain.Enums;
 using Stathub.Modules.Matches.Domain.Services;
 using Stathub.Modules.Players.Application;
+using Stathub.Modules.Rosters.Application;
+using Stathub.Modules.Rosters.Application.Dtos;
+using Stathub.Modules.Rosters.Domain.Enums;
 using Stathub.Modules.Standings.Application;
 using Stathub.Modules.Statistics.Application;
 using Stathub.Modules.Teams.Application;
@@ -31,7 +34,8 @@ public sealed class PublicReadService(
     TeamService teamService,
     PlayerService playerService,
     ITournamentReader tournamentReader,
-    PlayerStatisticsService playerStatisticsService)
+    PlayerStatisticsService playerStatisticsService,
+    RosterService rosterService)
 {
     public async Task<IReadOnlyList<PublicLeagueDto>> ListLeaguesAsync(
         string? query,
@@ -146,6 +150,150 @@ public sealed class PublicReadService(
             .ToList();
 
         return new PublicMatchPageDto(ToPublicMatch(state.Match, stage, teams), events);
+    }
+
+    /// <summary>
+    /// Страница команды. Команда общая для всех организаторов, поэтому видна только через
+    /// этапы опубликованных лиг: заявки и матчи из черновиков и архива не показываются,
+    /// а команда без публичных участий отдаёт 404.
+    /// </summary>
+    public async Task<PublicTeamPageDto> GetTeamPageAsync(
+        Guid teamId,
+        Guid? stageId,
+        CancellationToken cancellationToken)
+    {
+        var team = await teamService.GetByIdAsync(teamId, cancellationToken);
+        var entries = await rosterService.ListByTeamAsync(teamId, cancellationToken);
+        var teamMatches = await matchService.ListByTeamAsync(teamId, cancellationToken);
+
+        // Этап может быть известен только по заявке (матчей ещё нет) или только по матчам
+        // (матч без заявки в старых данных) — участием считаем и то, и другое.
+        var entriesByStage = entries
+            .GroupBy(entry => entry.StageId)
+            .ToDictionary(group => group.Key, group => group.First());
+        var matchesByStage = teamMatches
+            .GroupBy(match => match.StageId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        var published = new Dictionary<Guid, bool>();
+        var participations = new List<(StagePublicInfoDto Stage, DateTime LastActivityUtc)>();
+
+        foreach (var id in entriesByStage.Keys.Union(matchesByStage.Keys))
+        {
+            var stage = await stagePublicReader.GetAsync(id, cancellationToken);
+            if (stage is null) continue;
+            if (!await IsPublishedAsync(stage.TournamentId, published, cancellationToken)) continue;
+
+            var lastMatchUtc = matchesByStage.TryGetValue(id, out var stageMatches)
+                ? stageMatches.Max(match => match.ScheduledTimeUtc)
+                : DateTime.MinValue;
+            var registeredUtc = entriesByStage.TryGetValue(id, out var entry)
+                ? entry.CreatedAtUtc
+                : DateTime.MinValue;
+
+            participations.Add((stage, lastMatchUtc > registeredUtc ? lastMatchUtc : registeredUtc));
+        }
+
+        if (participations.Count == 0)
+            throw new NotFoundException($"Команда '{teamId}' не найдена.");
+
+        // Свежие участия первыми: по умолчанию открывается текущий сезон команды.
+        participations = participations
+            .OrderByDescending(item => item.LastActivityUtc)
+            .ThenBy(item => item.Stage.StageOrder)
+            .ToList();
+
+        var selected = stageId is { } requestedStageId
+            ? participations.Select(item => item.Stage).FirstOrDefault(stage => stage.StageId == requestedStageId)
+              ?? throw new NotFoundException($"Команда не участвует в этапе '{requestedStageId}'.")
+            : participations[0].Stage;
+
+        var matches = matchesByStage.GetValueOrDefault(selected.StageId) ?? [];
+        var teams = await GetTeamsAsync(CollectTeamIds(matches), cancellationToken);
+        var standings = await standingsService.GetStageStandingsAsync(selected.StageId, cancellationToken);
+        var players = await GetTeamPlayersAsync(
+            teamId,
+            selected,
+            entriesByStage.GetValueOrDefault(selected.StageId),
+            matches,
+            cancellationToken);
+
+        return new PublicTeamPageDto(
+            new PublicTeamDto(team.Id, team.Name, team.City, team.LogoUrl),
+            participations
+                .Select(item => new PublicTeamParticipationDto(
+                    item.Stage.StageId,
+                    item.Stage.StageName,
+                    item.Stage.TournamentId,
+                    item.Stage.TournamentName,
+                    item.Stage.LeagueName,
+                    item.Stage.LeagueSlug,
+                    item.Stage.LeagueLogoUrl,
+                    entriesByStage.GetValueOrDefault(item.Stage.StageId)?.Status.ToString()))
+                .ToList(),
+            ToPublicStage(selected),
+            matches.Select(match => ToPublicMatch(match, selected, teams)).ToList(),
+            standings.Rows,
+            players);
+    }
+
+    /// <summary>
+    /// Состав команды на этапе со статистикой только за её матчи этого этапа.
+    /// Игроки с событиями, но без заявки (заявку удалили как ошибочную), в состав не попадают.
+    /// </summary>
+    private async Task<IReadOnlyList<PublicTeamPlayerDto>> GetTeamPlayersAsync(
+        Guid teamId,
+        StagePublicInfoDto stage,
+        TournamentTeamDetailsDto? entry,
+        IReadOnlyCollection<MatchDto> stageMatches,
+        CancellationToken cancellationToken)
+    {
+        if (entry is null || entry.Registrations.Count == 0)
+            return [];
+
+        // У игрока может быть несколько заявок в одной команде (отзаявили и вернули) —
+        // показываем последнюю: она отражает текущий статус.
+        var registrations = entry.Registrations
+            .GroupBy(registration => registration.PlayerId)
+            .Select(group => group.OrderBy(registration => registration.JoinedOn).Last())
+            .ToList();
+
+        var players = (await playerService.GetByIdsAsync(
+                registrations.Select(registration => registration.PlayerId).ToList(),
+                cancellationToken))
+            .ToDictionary(player => player.Id);
+
+        var statistics = (await playerStatisticsService.GetTeamStatisticsAsync(
+                stage.TournamentId,
+                teamId,
+                stageMatches.Select(match => match.Id).ToList(),
+                cancellationToken))
+            .ToDictionary(row => row.PlayerId);
+
+        return registrations
+            .Select(registration =>
+            {
+                var player = players.GetValueOrDefault(registration.PlayerId);
+                var row = statistics.GetValueOrDefault(registration.PlayerId);
+
+                return new PublicTeamPlayerDto(
+                    registration.PlayerId,
+                    player?.FullName ?? "Игрок",
+                    player?.PhotoUrl,
+                    player?.BirthDate,
+                    registration.Status.ToString(),
+                    registration.JoinedOn,
+                    registration.LeftOn,
+                    row?.Matches ?? 0,
+                    row?.Goals ?? 0,
+                    row?.Assists ?? 0,
+                    row?.OwnGoals ?? 0,
+                    row?.YellowCards ?? 0,
+                    row?.RedCards ?? 0);
+            })
+            .OrderBy(player => player.Status == nameof(PlayerRegistrationStatus.Active) ? 0 : 1)
+            .ThenBy(player => player.FullName, StringComparer.CurrentCulture)
+            .ToList();
     }
 
     /// <summary>Лента «сейчас играют» для главного экрана витрины (doc §2.1).</summary>

@@ -47,6 +47,17 @@ public sealed class PublicController(PublicReadService publicReadService) : Cont
     public async Task<ActionResult<IReadOnlyList<PublicMatchDto>>> GetLive(CancellationToken cancellationToken) =>
         Ok(await publicReadService.ListLiveAsync(cancellationToken));
 
+    /// <summary>
+    /// Страница команды: участия в опубликованных этапах; матчи, таблица и состав —
+    /// по <paramref name="stageId"/> или, если он не указан, по самому свежему этапу.
+    /// </summary>
+    [HttpGet("teams/{id:guid}")]
+    public async Task<ActionResult<PublicTeamPageDto>> GetTeam(
+        Guid id,
+        [FromQuery] Guid? stageId,
+        CancellationToken cancellationToken) =>
+        Ok(await publicReadService.GetTeamPageAsync(id, stageId, cancellationToken));
+
     /// <summary>Статистика игроков турнира: голы, автоголы, карточки и матчи с событиями.</summary>
     [HttpGet("tournaments/{id:guid}/statistics")]
     public async Task<ActionResult<PublicTournamentStatisticsDto>> GetTournamentStatistics(

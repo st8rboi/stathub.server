@@ -50,6 +50,17 @@ public static class PlayerStatisticsCalculator
             .ToList();
     }
 
+    /// <summary>
+    /// Статистика игроков одной команды в заданных матчах (матчи этапа на странице команды).
+    /// Команда события — команда автора (у автогола тоже), поэтому игрок, перешедший внутри
+    /// турнира, получает здесь только то, что сделал за эту команду.
+    /// </summary>
+    public static IReadOnlyList<PlayerStatisticsEntry> CalculateForTeam(
+        IEnumerable<TournamentPlayerEvent> events,
+        Guid teamId,
+        IReadOnlySet<Guid> matchIds) =>
+        Calculate(events.Where(matchEvent => matchEvent.TeamId == teamId && matchIds.Contains(matchEvent.MatchId)));
+
     private static Accumulator Accumulate(
         Dictionary<Guid, Accumulator> accumulators,
         Guid playerId,

@@ -14,6 +14,9 @@ public interface IMatchRepository
         IReadOnlyCollection<Guid> ids,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Матчи команды (дома и в гостях) во всех этапах — публичная страница команды.</summary>
+    Task<IReadOnlyList<Match>> GetByTeamIdAsync(Guid teamId, CancellationToken cancellationToken = default);
+
     /// <summary>Матчи в заданных статусах — публичная live-лента «сейчас играют».</summary>
     Task<IReadOnlyList<Match>> GetByStatusAsync(
         IReadOnlyCollection<MatchStatus> statuses,

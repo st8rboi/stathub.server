@@ -23,6 +23,8 @@ internal sealed class TournamentTeamConfiguration : IEntityTypeConfiguration<Tou
         // одна и та же команда может играть — это отдельные заявки.
         builder.HasIndex(tournamentTeam => new { tournamentTeam.StageId, tournamentTeam.TeamId }).IsUnique();
         builder.HasIndex(tournamentTeam => tournamentTeam.TournamentId);
+        // Страница команды: все заявки клуба. Уникальный (StageId, TeamId) тут не помогает — TeamId второй.
+        builder.HasIndex(tournamentTeam => tournamentTeam.TeamId);
 
         builder
             .HasMany(tournamentTeam => tournamentTeam.Registrations)

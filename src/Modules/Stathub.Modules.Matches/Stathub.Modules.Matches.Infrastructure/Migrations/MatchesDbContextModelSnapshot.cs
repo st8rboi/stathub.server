@@ -90,6 +90,10 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AwayTeamId");
+
+                    b.HasIndex("HomeTeamId");
+
                     b.HasIndex("StageId");
 
                     b.ToTable("matches", "matches");

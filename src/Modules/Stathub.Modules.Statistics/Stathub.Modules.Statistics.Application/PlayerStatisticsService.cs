@@ -1,6 +1,7 @@
 using Stathub.Modules.Statistics.Application.Dtos;
 using Stathub.Modules.Statistics.Application.Interfaces;
 using Stathub.Modules.Statistics.Domain;
+using Stathub.Modules.Statistics.Domain.Models;
 
 namespace Stathub.Modules.Statistics.Application;
 
@@ -18,8 +19,31 @@ public sealed class PlayerStatisticsService(
         CancellationToken cancellationToken = default)
     {
         var events = await eventsSource.GetAsync(tournamentId, cancellationToken);
-        var entries = PlayerStatisticsCalculator.Calculate(events);
+        return await ToRowsAsync(PlayerStatisticsCalculator.Calculate(events), cancellationToken);
+    }
 
+    /// <summary>
+    /// Статистика игроков команды в указанных матчах турнира (страница команды: матчи этапа).
+    /// </summary>
+    public async Task<IReadOnlyList<PlayerStatisticsRowDto>> GetTeamStatisticsAsync(
+        Guid tournamentId,
+        Guid teamId,
+        IReadOnlyCollection<Guid> matchIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (matchIds.Count == 0)
+            return [];
+
+        var events = await eventsSource.GetAsync(tournamentId, cancellationToken);
+        var entries = PlayerStatisticsCalculator.CalculateForTeam(events, teamId, matchIds.ToHashSet());
+
+        return await ToRowsAsync(entries, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<PlayerStatisticsRowDto>> ToRowsAsync(
+        IReadOnlyList<PlayerStatisticsEntry> entries,
+        CancellationToken cancellationToken)
+    {
         if (entries.Count == 0)
             return [];
 

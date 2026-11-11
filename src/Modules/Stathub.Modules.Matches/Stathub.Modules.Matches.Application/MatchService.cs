@@ -65,6 +65,24 @@ public sealed class MatchService(
     }
 
     /// <summary>
+    /// Матчи команды во всех этапах в порядке расписания — публичная страница команды.
+    /// </summary>
+    public async Task<IReadOnlyList<MatchDto>> ListByTeamAsync(
+        Guid teamId,
+        CancellationToken cancellationToken = default)
+    {
+        if (teamId == Guid.Empty)
+            throw new DomainException("TeamId обязательное поле.");
+
+        var matches = await repository.GetByTeamIdAsync(teamId, cancellationToken);
+
+        return matches
+            .OrderBy(match => match.ScheduledTimeUtc)
+            .Select(MatchDto.From)
+            .ToList();
+    }
+
+    /// <summary>
     /// Матчи, которые идут прямо сейчас (в процессе или на паузе) — публичная live-лента.
     /// </summary>
     public async Task<IReadOnlyList<MatchDto>> ListLiveAsync(CancellationToken cancellationToken = default)

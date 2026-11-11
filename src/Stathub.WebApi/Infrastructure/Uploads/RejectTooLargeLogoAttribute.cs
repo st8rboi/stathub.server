@@ -23,7 +23,7 @@ public sealed class RejectTooLargeLogoAttribute : Attribute, IResourceFilter
         {
             Status = StatusCodes.Status413PayloadTooLarge,
             Title = "Payload Too Large",
-            Detail = "Файл слишком большой. Логотип — PNG, JPEG или WebP не больше 2 МБ."
+            Detail = "Файл слишком большой. Допустимы PNG, JPEG или WebP не больше 2 МБ."
         })
         {
             StatusCode = StatusCodes.Status413PayloadTooLarge

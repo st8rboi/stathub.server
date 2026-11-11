@@ -14,10 +14,12 @@ namespace Stathub.Modules.Players.Application.Dtos;
 public sealed record PlayerSuggestionDto(
     Guid Id,
     string FullName,
-    DateOnly? BirthDate)
+    DateOnly? BirthDate,
+    string? PhotoUrl)
 {
     internal static PlayerSuggestionDto From(Player player) => new(
         player.Id,
         player.FullName,
-        player.BirthDate);
+        player.BirthDate,
+        player.PhotoUrl);
 }

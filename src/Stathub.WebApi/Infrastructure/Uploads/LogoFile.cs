@@ -31,7 +31,7 @@ public static class LogoFile
             return "Поддерживаются только PNG, JPEG и WebP.";
 
         if (file.Length > MaxBytes)
-            return "Логотип не может быть больше 2 МБ.";
+            return "Файл не может быть больше 2 МБ.";
 
         return null;
     }

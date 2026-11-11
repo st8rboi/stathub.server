@@ -126,9 +126,10 @@ public sealed class PlayerService(
     /// <summary>
     /// Удаление игрока, на которого ещё никто не ссылается (ни заявки, ни события матчей).
     /// Между модулями нет FK, поэтому удаление использованного игрока оставило бы
-    /// составы и протоколы с несуществующим человеком.
+    /// составы и протоколы с несуществующим человеком. Возвращает путь к фото, чтобы
+    /// вызывающий удалил файл из хранилища.
     /// </summary>
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<string?> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var player = await repository.GetForUpdateAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Игрок '{id}' не найден.");
@@ -138,8 +139,58 @@ public sealed class PlayerService(
             throw new ConflictException(
                 $"Игрока нельзя удалить: он используется ({string.Join(", ", usages.Select(usage => usage.Description))}).");
 
+        var photoUrl = player.PhotoUrl;
+
         repository.Remove(player);
         await repository.SaveChangesAsync(cancellationToken);
+
+        return photoUrl;
+    }
+
+    /// <summary>
+    /// Игрок, если организации разрешено менять его фото. Проверка до сохранения файла:
+    /// иначе при отказе в хранилище останется файл, на который никто не ссылается.
+    /// </summary>
+    public async Task<PlayerDto> GetForPhotoChangeAsync(
+        Guid id,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var player = await GetOrThrowAsync(id, cancellationToken);
+        player.EnsureCanChangePhoto(tenantId);
+
+        return PlayerDto.From(player);
+    }
+
+    /// <summary>Сохраняет путь к загруженному фото (null — сбросить).</summary>
+    public async Task<PlayerDto> SetPhotoAsync(
+        Guid id,
+        string? photoUrl,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        // Читаем с отслеживанием: иначе EF не заметит изменение и SaveChanges ничего не запишет.
+        var player = await repository.GetForUpdateAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Игрок '{id}' не найден.");
+
+        player.SetPhoto(photoUrl, tenantId);
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return PlayerDto.From(player);
+    }
+
+    /// <summary>Сброс фото техподдержкой (см. PlayerOps). Возвращает путь к старому файлу.</summary>
+    public async Task<string?> ResetPhotoAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var player = await repository.GetForUpdateAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Игрок '{id}' не найден.");
+
+        var previousPhotoUrl = player.PhotoUrl;
+
+        player.ResetPhoto();
+        await repository.SaveChangesAsync(cancellationToken);
+
+        return previousPhotoUrl;
     }
 
     private async Task<IReadOnlyList<PlayerUsageDto>> GetUsagesAsync(Guid id, CancellationToken cancellationToken)

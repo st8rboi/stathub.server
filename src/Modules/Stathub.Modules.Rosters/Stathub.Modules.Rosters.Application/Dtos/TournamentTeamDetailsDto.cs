@@ -19,8 +19,7 @@ public sealed record TournamentTeamDetailsDto(
         tournamentTeam.TeamId,
         tournamentTeam.Status,
         tournamentTeam.Registrations
-            .OrderBy(registration => registration.SquadNumber ?? int.MaxValue)
-            .ThenBy(registration => registration.JoinedOn)
+            .OrderBy(registration => registration.JoinedOn)
             .Select(PlayerRegistrationDto.From)
             .ToList());
 }

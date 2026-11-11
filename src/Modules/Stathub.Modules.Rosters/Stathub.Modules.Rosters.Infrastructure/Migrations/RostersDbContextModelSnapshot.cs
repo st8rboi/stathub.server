@@ -37,9 +37,6 @@ namespace Stathub.Modules.Rosters.Infrastructure.Migrations
                     b.Property<Guid>("PlayerId")
                         .HasColumnType("uuid");
 
-                    b.Property<int?>("SquadNumber")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 

@@ -24,6 +24,18 @@ public sealed class Player : AggregateRoot
     // Но она — главный различитель полных тёзок, поэтому показывается в подсказках поиска.
     public DateOnly? BirthDate { get; private set; }
 
+    /// <summary>
+    /// Относительный путь к загруженному фото (например, <c>/uploads/logos/{id}.jpg</c>).
+    /// Файл живёт в объектном хранилище, в БД — только путь.
+    /// </summary>
+    public string? PhotoUrl { get; private set; }
+
+    /// <summary>
+    /// Организация, загрузившая фото. Игрок общий для всех лиг, поэтому фото, как и логотип команды,
+    /// закрепляется за первым загрузившим: остальные его переиспользуют или меняют через техподдержку.
+    /// </summary>
+    public Guid? PhotoOwnerTenantId { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     private Player()
@@ -77,6 +89,38 @@ public sealed class Player : AggregateRoot
         if (usedByOrganizerIds.Any(organizerId => organizerId != tenantId))
             throw new ForbiddenException(
                 "Игрок используется в лигах других организаторов. Изменить его можно через техподдержку.");
+    }
+
+    /// <summary>Фото без владельца свободно; занятое может менять только его владелец.</summary>
+    public void EnsureCanChangePhoto(Guid tenantId)
+    {
+        if (PhotoUrl is not null && PhotoOwnerTenantId != tenantId)
+            throw new ForbiddenException(
+                "Фото игрока уже загружено другим организатором. Заменить его можно через техподдержку.");
+    }
+
+    /// <summary>
+    /// Устанавливает или сбрасывает фото (<paramref name="photoUrl"/> = null — удалить,
+    /// после чего фото снова может загрузить любой организатор).
+    /// </summary>
+    public void SetPhoto(string? photoUrl, Guid tenantId)
+    {
+        EnsureCanChangePhoto(tenantId);
+
+        var normalized = string.IsNullOrWhiteSpace(photoUrl) ? null : photoUrl.Trim();
+
+        if (normalized is { Length: > 500 })
+            throw new DomainException("Путь к фото не может быть длиннее 500 символов.");
+
+        PhotoUrl = normalized;
+        PhotoOwnerTenantId = normalized is null ? null : tenantId;
+    }
+
+    /// <summary>Сброс фото техподдержкой: снимает закрепление за организацией.</summary>
+    public void ResetPhoto()
+    {
+        PhotoUrl = null;
+        PhotoOwnerTenantId = null;
     }
 
     private static string NormalizeName(string fullName)

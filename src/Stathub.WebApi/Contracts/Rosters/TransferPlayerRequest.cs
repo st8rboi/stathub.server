@@ -7,5 +7,4 @@ namespace Stathub.WebApi.Contracts.Rosters;
 public sealed record TransferPlayerRequest(
     Guid PlayerId,
     Guid FromTeamId,
-    Guid ToTeamId,
-    int? SquadNumber);
+    Guid ToTeamId);

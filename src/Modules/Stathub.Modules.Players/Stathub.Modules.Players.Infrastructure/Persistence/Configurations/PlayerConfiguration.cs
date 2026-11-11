@@ -18,6 +18,9 @@ internal sealed class PlayerConfiguration : IEntityTypeConfiguration<Player>
         // Дата рождения необязательна: организатор может её не знать
         builder.Property(p => p.BirthDate);
 
+        builder.Property(p => p.PhotoUrl).HasMaxLength(500);
+        builder.Property(p => p.PhotoOwnerTenantId);
+
         builder.Property(p => p.CreatedAtUtc).IsRequired();
 
         // Подсказки ищутся через similarity/ILIKE — без этого индекса поиск превратится

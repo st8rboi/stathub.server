@@ -59,7 +59,6 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
             stageId,
             id,
             request.PlayerId,
-            request.SquadNumber,
             cancellationToken);
 
         return Ok(new { Id = registrationId });
@@ -76,18 +75,6 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
         await rosterService.ReleasePlayerAsync(stageId, id, registrationId, cancellationToken);
         return NoContent();
     }
-
-    /// <summary>Смена игрового номера в активной заявке.</summary>
-    [HttpPut("teams/{id:guid}/players/{registrationId:guid}/squad-number")]
-    [Authorize(Policy = AuthPolicies.Organizer)]
-    public async Task<ActionResult<PlayerRegistrationDto>> ChangeSquadNumber(
-        Guid stageId,
-        Guid id,
-        Guid registrationId,
-        ChangeSquadNumberRequest request,
-        CancellationToken cancellationToken) =>
-        Ok(await rosterService.ChangeSquadNumberAsync(
-            stageId, id, registrationId, request.SquadNumber, cancellationToken));
 
     /// <summary>Удаление ошибочной заявки игрока. 409 — по ней уже есть события в матчах (отзаявите).</summary>
     [HttpDelete("teams/{id:guid}/players/{registrationId:guid}")]
@@ -123,7 +110,6 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
             request.PlayerId,
             request.FromTeamId,
             request.ToTeamId,
-            request.SquadNumber,
             cancellationToken);
 
         return NoContent();

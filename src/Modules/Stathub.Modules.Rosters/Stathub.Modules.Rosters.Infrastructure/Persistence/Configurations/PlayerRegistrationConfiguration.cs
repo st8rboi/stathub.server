@@ -15,7 +15,6 @@ internal sealed class PlayerRegistrationConfiguration : IEntityTypeConfiguration
 
         builder.Property(registration => registration.TournamentTeamId).IsRequired();
         builder.Property(registration => registration.PlayerId).IsRequired();
-        builder.Property(registration => registration.SquadNumber);
         builder.Property(registration => registration.Status).IsRequired();
         builder.Property(registration => registration.JoinedOn).IsRequired();
         builder.Property(registration => registration.LeftOn);

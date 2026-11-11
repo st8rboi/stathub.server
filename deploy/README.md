@@ -13,14 +13,17 @@ HTTP и заход по IP редиректят на HTTPS. В конфигах 
 
 ## Первый запуск
 
-### 1. Локально: собрать образ API
+### 1. Локально: собрать API
 
-Docker Desktop должен быть запущен. Из каталога `stathub.server`:
+Из каталога `stathub.server`:
 
 ```powershell
-docker build --platform linux/amd64 -t stathub-api:latest .
-docker save -o stathub-api.tar stathub-api:latest
+dotnet publish src/Stathub.WebApi/Stathub.WebApi.csproj -c Release -o publish -p:UseAppHost=false
+Remove-Item publish/appsettings.Development.json, publish/BuildHost-* -Recurse -ErrorAction Ignore
+New-Item -ItemType Directory -Force publish/wwwroot/uploads | Out-Null
 ```
+
+Образ API не собирается: на сервере сборка запускается на готовом `aspnet`-образе (см. «CI/CD»).
 
 ### 2. Локально: собрать фронт
 
@@ -40,16 +43,18 @@ pnpm build:web
 
 ```powershell
 scp -r deploy shadmin@IP:stathub
-scp stathub-api.tar shadmin@IP:/tmp/
+scp -r publish shadmin@IP:/tmp/api
 scp -r ..\stathub.client\apps\public\dist shadmin@IP:/tmp/public
 scp -r ..\stathub.client\apps\web\dist shadmin@IP:/tmp/admin
 ```
 
-### 4. На сервере: загрузить образ, разложить фронт, создать .env
+### 4. На сервере: разложить API и фронт, создать .env
 
 ```bash
 cd ~/stathub
-docker load -i /tmp/stathub-api.tar && rm /tmp/stathub-api.tar
+mkdir -p api/releases
+mv /tmp/api api/releases/manual
+ln -sfn releases/manual api/current
 
 mkdir -p sites
 mv /tmp/public sites/public
@@ -120,10 +125,18 @@ docker compose exec -T postgres pg_restore -U stathub -d stathub --clean --if-ex
 
 После первого запуска (шаги выше) обновления идут автоматически:
 
-| Репозиторий | На PR в `main` | После merge в `main` |
-|---|---|---|
-| `stathub.server` | build + тесты (с Postgres) | + `dotnet publish` → rsync в `~/stathub/api/publish` (только изменившиеся файлы) → `docker build` на сервере по `api/Dockerfile` → `docker compose up -d` → проверка, что API ответил |
-| `stathub.client` | lint + build админки и витрины | + выкладка `dist` в `sites/admin` и `sites/public` |
+| Репозиторий | Push в `dev` | PR в `main` | Merge (push) в `main` |
+|---|---|---|---|
+| `stathub.server` | build + тесты (с Postgres) | ничего | только деплой: `dotnet publish` → rsync в `~/stathub/api/releases/<sha>` → `api/current` переключается на новую версию → `docker compose up -d` → проверка, что API ответил |
+| `stathub.client` | lint + build админки и витрины | ничего | build + выкладка `dist` в `sites/admin` и `sites/public` |
+
+Тесты на `main` не повторяются: в `main` попадает только то, что уже прошло проверки в `dev`.
+
+**Как устроен API на сервере.** Образ не собирается: контейнер `api` запускается на готовом
+`mcr.microsoft.com/dotnet/aspnet:10.0` (закреплён по digest в `docker-compose.yml`), а сборка
+подключается томом из `api/current` — это ссылка на каталог версии в `api/releases/<sha>`.
+Неизменившиеся файлы новой версии — жёсткие ссылки на файлы предыдущей (`rsync --link-dest`),
+поэтому деплой почти не пишет на диск. Хранятся текущая и 4 предыдущие версии.
 
 Workflow: `stathub.server/.github/workflows/ci-cd.yml`, `stathub.client/.github/workflows/ci-cd.yml`.
 Конфиги из `deploy/` (compose, nginx, backup.sh) тоже синхронизируются при деплое сервера;
@@ -159,33 +172,51 @@ Workflow: `stathub.server/.github/workflows/ci-cd.yml`, `stathub.client/.github/
 
    После этого удалите локальные `stathub-deploy` и `stathub-deploy.pub`.
 
-5. Рекомендуется защитить `main` (Settings → Branches): merge только через PR с зелёной сборкой.
+5. Рекомендуется защитить `main` (Settings → Branches): merge только через PR из `dev`. Проверки на PR не запускаются — они уже прошли на push в `dev`.
 
 ### Откат API
 
-На сервере хранятся 5 последних образов с тегом = SHA коммита:
+На сервере хранятся 5 последних версий, имя каталога — SHA коммита:
 
 ```bash
-docker images stathub-api                         # список
-docker tag stathub-api:<SHA> stathub-api:latest
-docker compose up -d api
+cd ~/stathub
+ls -lt api/releases                                  # список, свежие сверху
+ln -sfn releases/<SHA> api/current
+docker compose up -d --no-deps --force-recreate api
 ```
 
+Миграции БД при откате не отменяются: откатывайтесь только на версию, совместимую с текущей схемой.
 Следующий merge в `main` снова выложит свежую версию.
+
+### Обновление образа .NET
+
+Версия `aspnet` закреплена digest-ом, чтобы новый образ не скачивался внезапно посреди деплоя.
+Обновлять вместе с SDK в `global.json`: `docker pull mcr.microsoft.com/dotnet/aspnet:10.0`,
+взять digest из вывода (`Digest: sha256:...`) и прописать его в `docker-compose.yml`.
+
+### Новый сервер: владелец тома с логотипами
+
+Существующий том `uploads` уже принадлежит пользователю приложения (1654). Для нового тома
+выполнить один раз после первого `docker compose up -d`:
+
+```bash
+docker compose run --rm --no-deps --user root --entrypoint chown api -R 1654:1654 /app/wwwroot/uploads
+```
 
 ---
 
 ## Ручное обновление (без CI)
 
-**API** — шаги 1 и 3 (только `stathub-api.tar`), затем на сервере:
+**API** — шаги 1 и 3 (только `publish` → `/tmp/api`), затем на сервере (имя каталога — любое, например дата):
 
 ```bash
-docker load -i /tmp/stathub-api.tar && rm /tmp/stathub-api.tar
-docker compose up -d api
+cd ~/stathub
+mv /tmp/api api/releases/2026-11-11
+ln -sfn releases/2026-11-11 api/current
+docker compose up -d --no-deps --force-recreate api
 ```
 
-Для возможности отката тегируйте сборки датой (`-t stathub-api:2026-11-07`) и указывайте тег
-в `API_IMAGE` в `.env`; откат — вернуть прежний тег и `docker compose up -d api`.
+Откат — как в разделе «Откат API».
 
 **Фронт** — шаги 2 и 3 (только нужный `dist`), затем на сервере, например для админки:
 

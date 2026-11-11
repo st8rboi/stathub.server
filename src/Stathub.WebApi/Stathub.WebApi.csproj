@@ -6,6 +6,9 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Scalar.AspNetCore" />
+    <!-- Нужен только инструменту dotnet ef (миграции запускаются с этим startup-проектом).
+         Publish="false": Roslyn, MSBuild и их локализации не попадают в прод-сборку. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" Publish="false" />
   </ItemGroup>
   
   <ItemGroup>

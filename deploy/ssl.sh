@@ -41,6 +41,17 @@ as_root() {
     docker run --rm -v "$PWD/certbot/conf:/c" "$@"
 }
 
+# Есть ли файл в certbot/conf (путь относительно него). Если nginx запущен — проверяем через exec в нём
+# (certbot/conf смонтирован в /etc/letsencrypt, exec идёт от root): новый контейнер не создаётся.
+# На диске сервера docker run может занимать минуты, а при деплое эта проверка выполняется всегда.
+conf_has() {
+    if docker compose exec -T nginx true >/dev/null 2>&1; then
+        docker compose exec -T nginx test -f "/etc/letsencrypt/$1"
+    else
+        as_root alpine:3.20 test -f "/c/$1"
+    fi
+}
+
 ensure_one() {
     local name=$1
     # Сертификат на IP выпущен для другого адреса (сервер сменил IP) — сбрасываем на временный,
@@ -51,7 +62,7 @@ ensure_one() {
         echo "[ip] сертификат выпущен не для $SERVER_IP — перевыпускаю"
         as_root alpine:3.20 rm -rf /c/live/ip /c/archive/ip /c/renewal/ip.conf
     fi
-    if as_root alpine:3.20 test -f "/c/live/$name/fullchain.pem"; then
+    if conf_has "live/$name/fullchain.pem"; then
         return 0
     fi
     echo "[$name] сертификата нет — создаю временный самоподписанный"
@@ -66,7 +77,7 @@ ensure_one() {
 
 issue_one() {
     local name=$1
-    if ! as_root alpine:3.20 test -f "/c/.dummy-$name"; then
+    if ! conf_has ".dummy-$name"; then
         echo "[$name] сертификат Let's Encrypt уже выпущен"
         return 0
     fi

@@ -141,21 +141,29 @@ jobs:
           cd ~/stathub
           chmod +x backup.sh
           DOMAIN=xn--80aad5dfbv.xn--p1ai   # статхаб.рф
+          # Метки времени: если шаг зависнет, в логе видно, на какой команде.
+          log() { echo "[$(date +%T)] $*"; }
 
           # Без файла сертификата nginx с ssl-конфигом не стартует: при первом деплое кладём временный.
+          log 'ssl.sh ensure'
           bash ssl.sh ensure
 
           # Переключаем версию. Предыдущая остаётся в api/releases для отката (deploy/README.md).
           ln -sfn "releases/$RELEASE" api/current
 
+          log 'compose up'
           docker compose up -d --remove-orphans
           # Ссылка api/current разрешается при создании контейнера — API пересоздаём явно.
+          log 'recreate api'
           docker compose up -d --no-deps --force-recreate api
           # Код бота подключён томом — перезапуск подхватывает новый bot.mjs (пара секунд простоя некритична).
+          log 'restart bot'
           docker compose restart bot
           # Изменения в nginx/*.conf подхватываются без пересоздания контейнера.
+          log 'nginx reload'
           docker compose exec -T nginx nginx -s reload
 
+          log 'ожидание API'
           # Ждём, пока API поднимется (миграции при старте). 502/503/504/000 = API ещё не отвечает,
           # любой другой код (в т.ч. 404 на несуществующий путь) = Kestrel работает.
           # По HTTP nginx отвечает только редиректом, поэтому идём на HTTPS локально
@@ -175,11 +183,14 @@ jobs:
           done
 
           # Храним текущую и 4 предыдущие версии, остальные удаляем (диск всего 20 ГБ).
+          log 'чистка старых версий'
           cd api/releases
           ls -1t | grep -vx -e "$RELEASE" -e empty | tail -n +5 | xargs -r rm -rf
 
           # Если сертификат ещё временный — выпускаем настоящий (дальше его продлевает сервис certbot).
           # Ошибка здесь валит деплой намеренно: с временным сертификатом браузеры показывают предупреждение.
           cd ~/stathub
+          log 'ssl.sh issue'
           bash ssl.sh issue
+          log 'готово'
           EOF

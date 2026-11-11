@@ -68,7 +68,6 @@ public sealed class RosterService(
         Guid stageId,
         Guid tournamentTeamId,
         Guid playerId,
-        int? squadNumber,
         CancellationToken cancellationToken = default)
     {
         var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
@@ -85,7 +84,6 @@ public sealed class RosterService(
 
         var registration = tournamentTeam.RegisterPlayer(
             playerId,
-            squadNumber,
             DateOnly.FromDateTime(DateTime.UtcNow));
 
         await repository.SaveChangesAsync(cancellationToken);
@@ -115,7 +113,6 @@ public sealed class RosterService(
         Guid playerId,
         Guid fromTeamId,
         Guid toTeamId,
-        int? squadNumber = null,
         CancellationToken cancellationToken = default)
     {
         var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
@@ -132,7 +129,7 @@ public sealed class RosterService(
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         from.TransferOut(playerId, today);
-        to.RegisterPlayer(playerId, squadNumber, today);
+        to.RegisterPlayer(playerId, today);
 
         // Оба агрегата в одном DbContext — сохраняются одной транзакцией.
         await repository.SaveChangesAsync(cancellationToken);
@@ -150,25 +147,6 @@ public sealed class RosterService(
         tournamentTeam.Withdraw(DateOnly.FromDateTime(DateTime.UtcNow));
 
         await repository.SaveChangesAsync(cancellationToken);
-    }
-
-    /// <summary>Смена игрового номера в активной заявке (null — без номера).</summary>
-    public async Task<PlayerRegistrationDto> ChangeSquadNumberAsync(
-        Guid stageId,
-        Guid tournamentTeamId,
-        Guid registrationId,
-        int? squadNumber,
-        CancellationToken cancellationToken = default)
-    {
-        var stage = await GetStageOrThrowAsync(stageId, cancellationToken);
-        EnsureRosterChangeable(stage);
-
-        var tournamentTeam = await GetTeamOrThrowAsync(stageId, tournamentTeamId, cancellationToken);
-        var registration = tournamentTeam.ChangeSquadNumber(registrationId, squadNumber);
-
-        await repository.SaveChangesAsync(cancellationToken);
-
-        return PlayerRegistrationDto.From(registration);
     }
 
     /// <summary>

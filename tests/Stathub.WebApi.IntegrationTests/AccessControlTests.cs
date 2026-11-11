@@ -87,7 +87,7 @@ public sealed class AccessControlTests(StathubApiFactory factory)
             await referee.PostAsJsonAsync($"{stage}/teams", new { teamId = newTeamId }),
             await referee.PostAsJsonAsync(
                 $"{stage}/teams/{scenario.HomeRegistrationId}/players",
-                new { playerId, squadNumber = 7 }),
+                new { playerId }),
             await referee.PostAsync(
                 $"{stage}/teams/{scenario.HomeRegistrationId}/players/{Guid.NewGuid()}/release",
                 null),
@@ -95,8 +95,7 @@ public sealed class AccessControlTests(StathubApiFactory factory)
             {
                 playerId,
                 fromTeamId = scenario.HomeTeamId,
-                toTeamId = scenario.AwayTeamId,
-                squadNumber = 9
+                toTeamId = scenario.AwayTeamId
             }),
             await referee.PostAsync($"{stage}/teams/{scenario.HomeRegistrationId}/withdraw", null)
         };

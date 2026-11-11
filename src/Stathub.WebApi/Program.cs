@@ -217,6 +217,12 @@ if (TeamOps.Matches(args))
     return;
 }
 
+if (PlayerOps.Matches(args))
+{
+    Environment.ExitCode = await PlayerOps.RunAsync(app.Services, args);
+    return;
+}
+
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 

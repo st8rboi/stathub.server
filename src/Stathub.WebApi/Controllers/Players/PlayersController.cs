@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Stathub.Infrastructure.Storage;
 using Stathub.Modules.Identity.Application.Interfaces;
 using Stathub.Modules.Players.Application;
 using Stathub.Modules.Players.Application.Dtos;
 using Stathub.WebApi.Contracts.Players;
 using Stathub.WebApi.Infrastructure.Auth;
+using Stathub.WebApi.Infrastructure.Uploads;
 
 namespace Stathub.WebApi.Controllers.Players;
 
@@ -13,7 +15,10 @@ namespace Stathub.WebApi.Controllers.Players;
 // Чтение нужно всем в организации (судья показывает авторов событий),
 // создание — только организатору.
 [Authorize(Policy = AuthPolicies.TenantMember)]
-public sealed class PlayersController(PlayerService playerService, ICurrentUser currentUser) : ControllerBase
+public sealed class PlayersController(
+    PlayerService playerService,
+    ILogoStorage logoStorage,
+    ICurrentUser currentUser) : ControllerBase
 {
     /// <summary>
     /// Исправление ФИО и даты рождения. 403 — игрок используется в лигах других организаторов
@@ -33,8 +38,64 @@ public sealed class PlayersController(PlayerService playerService, ICurrentUser 
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> DeletePlayer(Guid id, CancellationToken cancellationToken)
     {
-        await playerService.DeleteAsync(id, cancellationToken);
+        var photoUrl = await playerService.DeleteAsync(id, cancellationToken);
+
+        // Игрока в БД уже нет — файл фото больше никому не нужен.
+        await logoStorage.DeleteAsync(photoUrl, cancellationToken);
+
         return NoContent();
+    }
+
+    /// <summary>Загрузка фото игрока: файл кладётся в хранилище, в БД — только путь.</summary>
+    [HttpPost("{id:guid}/photo")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    // Лимит выше бизнес-лимита, чтобы размер проверяла наша валидация и отвечала
+    // понятным текстом, а не «Request body too large» от формата формы.
+    [RequestSizeLimit(LogoFile.MaxRequestBytes)]
+    [RejectTooLargeLogo]
+    public async Task<ActionResult<PlayerDto>> UploadPhoto(
+        Guid id,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        var error = LogoFile.Validate(file);
+        if (error is not null)
+            return Problem(detail: error, statusCode: StatusCodes.Status400BadRequest);
+
+        var current = await playerService.GetForPhotoChangeAsync(id, currentUser.TenantId, cancellationToken);
+
+        await using var stream = file.OpenReadStream();
+
+        string photoUrl;
+        try
+        {
+            photoUrl = await logoStorage.SaveAsync(stream, LogoFile.ExtensionFor(file.ContentType), cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return Problem(
+                detail: "Не удалось сохранить файл фото на сервере. Проверьте права на каталог wwwroot/uploads.",
+                statusCode: StatusCodes.Status500InternalServerError);
+        }
+
+        var player = await playerService.SetPhotoAsync(id, photoUrl, currentUser.TenantId, cancellationToken);
+
+        // Старый файл больше не нужен: в БД уже новый путь.
+        await logoStorage.DeleteAsync(current.PhotoUrl, cancellationToken);
+
+        return Ok(player);
+    }
+
+    [HttpDelete("{id:guid}/photo")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<ActionResult<PlayerDto>> DeletePhoto(Guid id, CancellationToken cancellationToken)
+    {
+        var current = await playerService.GetForPhotoChangeAsync(id, currentUser.TenantId, cancellationToken);
+        var player = await playerService.SetPhotoAsync(id, null, currentUser.TenantId, cancellationToken);
+
+        await logoStorage.DeleteAsync(current.PhotoUrl, cancellationToken);
+
+        return Ok(player);
     }
 
     [HttpPost]

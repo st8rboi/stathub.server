@@ -6,7 +6,6 @@ namespace Stathub.Modules.Rosters.Application.Dtos;
 public sealed record PlayerRegistrationDto(
     Guid Id,
     Guid PlayerId,
-    int? SquadNumber,
     PlayerRegistrationStatus Status,
     DateOnly JoinedOn,
     DateOnly? LeftOn)
@@ -14,7 +13,6 @@ public sealed record PlayerRegistrationDto(
     internal static PlayerRegistrationDto From(PlayerRegistration registration) => new(
         registration.Id,
         registration.PlayerId,
-        registration.SquadNumber,
         registration.Status,
         registration.JoinedOn,
         registration.LeftOn);

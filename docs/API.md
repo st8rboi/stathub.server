@@ -330,10 +330,10 @@ HomeScore, AwayScore`. Модель ожидает ещё 6.
 { "teamId": "d7014a32-aa30-45b3-b104-8374960c511e" }
 
 // POST .../teams/{id}/players
-{ "playerId": "eb6523e6-7845-4bb3-9b7c-db7ede0adaca", "squadNumber": 7 }
+{ "playerId": "eb6523e6-7845-4bb3-9b7c-db7ede0adaca" }
 
 // POST .../transfers
-{ "playerId": "eb6523e6-...", "fromTeamId": "d7014a32-...", "toTeamId": "daecada9-...", "squadNumber": 9 }
+{ "playerId": "eb6523e6-...", "fromTeamId": "d7014a32-...", "toTeamId": "daecada9-..." }
 ```
 
 Правила (проверены живьём):
@@ -509,3 +509,25 @@ Read-only маршруты без аутентификации; черновик
 
 **Сессия.** Заменённый refresh-токен ещё 2 минуты можно предъявить повторно: на плохой связи ответ
 с новым токеном может потеряться. Выход и смена пароля это окно закрывают.
+
+---
+
+## Обновление: фото игрока, без игровых номеров
+
+**Фото игрока** работает так же, как логотип команды: файл в хранилище (`ILogoStorage`), в БД — путь.
+
+| Метод | Маршрут | Ответ |
+|---|---|---|
+| `POST` | `/players/{id}/photo` | 200 `PlayerDto` / 400 / 403 / 404 |
+| `DELETE` | `/players/{id}/photo` | 200 `PlayerDto` (фото сброшено) / 403 |
+
+- Тело — `multipart/form-data` с полем `file`; PNG/JPEG/WebP, до 2 МБ. Файл отдаётся по `/uploads/logos/{guid}.{ext}`.
+- В `PlayerDto` появились `photoUrl` и `photoOwnerTenantId`, в `/players/suggest` — `photoUrl`.
+- Фото закрепляется за организацией, загрузившей его первой; остальным при замене или удалении — 403.
+  Техподдержка снимает закрепление командой
+  `dotnet run --project src/Stathub.WebApi -- reset-player-photo <playerId>`.
+- При удалении игрока файл фото удаляется из хранилища.
+
+**Игровые номера убраны.** В заявке игрока больше нет `squadNumber`: поле удалено из тел
+`POST .../teams/{id}/players` и `POST .../transfers` и из `PlayerRegistrationDto`, эндпоинт
+`PUT .../players/{registrationId}/squad-number` удалён. Состав команды сортируется по дате заявки.

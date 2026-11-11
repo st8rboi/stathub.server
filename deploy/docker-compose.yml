@@ -50,9 +50,17 @@ services:
           memory: 512M
     logging: *logging
 
+  # Образ не собирается: готовый рантайм .NET, а сборка API (dotnet publish) подключается томом
+  # из api/current — ссылки на текущую версию в api/releases/<sha> (выкладывает CI, см. README.md).
+  # Версия образа закреплена по digest: иначе обновление тега 10.0 у Microsoft внезапно скачивает
+  # и распаковывает новый образ посреди деплоя. Обновлять осознанно, вместе с SDK в global.json.
   api:
-    image: ${API_IMAGE:-stathub-api:latest}
+    image: mcr.microsoft.com/dotnet/aspnet:10.0@sha256:bfd912c83295ce66d4b706ebb8541b9f14259b0e76fbb88b2751f58ce2399d2e
     restart: unless-stopped
+    # 1654 — непривилегированный пользователь app из образа aspnet ($APP_UID).
+    user: "1654:1654"
+    working_dir: /app
+    command: ["dotnet", "Stathub.WebApi.dll"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +73,10 @@ services:
       # подключении пытается загрузить libgssapi_krb5 (её нет в образе) и пишет ошибку в лог.
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=stathub;Username=stathub;Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable"
       Jwt__Key: ${JWT_KEY:?Задайте JWT_KEY в .env}
+      ASPNETCORE_HTTP_PORTS: "8080"
     volumes:
+      - ./api/current:/app:ro
+      # Логотипы и фото пишет приложение. Владелец каталога в томе — 1654 (для нового тома см. README.md).
       - uploads:/app/wwwroot/uploads
     deploy:
       resources:

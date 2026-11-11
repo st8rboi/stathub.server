@@ -1,4 +1,5 @@
-# Сборка и тесты на каждый push в dev и PR в main; после merge в main — деплой API на VPS.
+# Push в dev — сборка и тесты. PR в main ничего не запускает. Merge (push) в main — только деплой API на VPS:
+# тесты к этому моменту уже прошли в dev.
 # Секреты репозитория (Settings → Secrets and variables → Actions):
 #   DEPLOY_HOST         — IP сервера
 #   DEPLOY_USER         — пользователь (shadmin)
@@ -11,14 +12,12 @@ name: CI/CD
 on:
   push:
     branches: [main, dev]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # PR-сборки можно отменять, деплой — нет.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Деплой не отменяем: оборванная выкладка хуже, чем дождаться предыдущей.
+  cancel-in-progress: false
 
 env:
   DOTNET_NOLOGO: true
@@ -26,6 +25,7 @@ env:
 
 jobs:
   test:
+    if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -61,12 +61,11 @@ jobs:
         run: dotnet test Stathub.slnx -c Release --no-build
 
   deploy:
-    needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 40
     env:
-      IMAGE: stathub-api:${{ github.sha }}
+      RELEASE: ${{ github.sha }}
       TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
     steps:
       - uses: actions/checkout@v4
@@ -75,14 +74,18 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Образ собирается на сервере (deploy/api/Dockerfile), сюда — только publish.
-      # Dev-настройки (в т.ч. dev-ключ JWT) и загруженные локально логотипы в прод не кладём.
+      # Образ на сервере не собирается: API запускается на готовом aspnet-образе (deploy/docker-compose.yml),
+      # а сборка подключается томом. Dev-настройки (в т.ч. dev-ключ JWT), локальные логотипы и
+      # BuildHost-* (служебные файлы dotnet ef) в прод не кладём.
       - name: Publish
         run: |
           dotnet publish src/Stathub.WebApi/Stathub.WebApi.csproj \
             -c Release -o publish -p:UseAppHost=false
           rm -f publish/appsettings.Development.json
-          rm -rf publish/wwwroot/uploads
+          rm -rf publish/wwwroot/uploads publish/BuildHost-*
+          # Точка монтирования тома с логотипами: каталог приложения смонтирован только на чтение,
+          # поэтому создать её при старте контейнера Docker не сможет.
+          mkdir -p publish/wwwroot/uploads
 
       - name: Set up SSH
         env:
@@ -96,31 +99,44 @@ jobs:
           # Keepalive: подвисшее соединение рвётся через ~1 мин, а не висит до таймаута джобы.
           printf 'Host *\n  ServerAliveInterval 15\n  ServerAliveCountMax 4\n' > ~/.ssh/config
 
-      # .env, sites/ и backups/ в репозитории отсутствуют, поэтому rsync их не трогает (без --delete).
-      # Заодно кладёт deploy/api/Dockerfile в ~/stathub/api/.
+      # .env, sites/, backups/ и api/releases в репозитории отсутствуют, поэтому rsync их не трогает (без --delete).
       - name: Sync deploy configs
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: |
-          rsync -rtz --chmod=D755,F644 \
+          rsync -rtz --timeout=60 --chmod=D755,F644 \
             --exclude '.gitignore' --exclude '.gitattributes' --exclude 'README.md' \
             deploy/ "$TARGET:stathub/"
 
-      # Без registry и без docker save: по сети идут только изменившиеся файлы (-c сравнивает
-      # по содержимому, т.к. mtime после publish всегда новый) — обычно наши DLL, пара МБ.
+      # Каждая версия — отдельный каталог api/releases/<sha>, api/current — ссылка на работающую.
+      # Первый деплой по этой схеме берёт за основу прежний api/publish.
+      - name: Prepare release
+        timeout-minutes: 2
+        run: |
+          ssh "$TARGET" bash -s <<'EOF'
+          set -euo pipefail
+          cd ~/stathub/api
+          mkdir -p releases
+          if [ ! -e current ]; then
+            if [ -d publish ]; then ln -sfn publish current
+            else mkdir -p releases/empty && ln -sfn releases/empty current; fi
+          fi
+          EOF
+
+      # Неизменившиеся файлы не копируются, а становятся жёсткими ссылками на файлы текущей версии
+      # (--link-dest): на диск сервера пишутся только новые DLL. -c сравнивает по содержимому,
+      # т.к. mtime после publish всегда новый.
       - name: Upload app
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
-          rsync -rcz --delete --chmod=D755,F644 \
-            publish/ "$TARGET:stathub/api/publish/"
+          rsync -rcz --delete --timeout=60 --stats --chmod=D755,F644 \
+            --link-dest=../../current/ \
+            publish/ "$TARGET:stathub/api/releases/$RELEASE/"
 
-      # Базовый aspnet:10.0 берётся из кэша сервера; при первом деплое скачивается один раз.
-      - name: Build image on server
-        timeout-minutes: 5
-        run: ssh "$TARGET" "cd ~/stathub/api && docker build -q -t '$IMAGE' ."
-
+      # Запас по времени — на первый деплой: compose один раз скачает закреплённый aspnet-образ.
       - name: Restart services
+        timeout-minutes: 20
         run: |
-          ssh "$TARGET" IMAGE="$IMAGE" bash -s <<'EOF'
+          ssh "$TARGET" RELEASE="$RELEASE" bash -s <<'EOF'
           set -euo pipefail
           cd ~/stathub
           chmod +x backup.sh
@@ -129,9 +145,12 @@ jobs:
           # Без файла сертификата nginx с ssl-конфигом не стартует: при первом деплое кладём временный.
           bash ssl.sh ensure
 
-          # compose использует stathub-api:latest (API_IMAGE в .env); тег с SHA остаётся для отката.
-          docker tag "$IMAGE" stathub-api:latest
+          # Переключаем версию. Предыдущая остаётся в api/releases для отката (deploy/README.md).
+          ln -sfn "releases/$RELEASE" api/current
+
           docker compose up -d --remove-orphans
+          # Ссылка api/current разрешается при создании контейнера — API пересоздаём явно.
+          docker compose up -d --no-deps --force-recreate api
           # Код бота подключён томом — перезапуск подхватывает новый bot.mjs (пара секунд простоя некритична).
           docker compose restart bot
           # Изменения в nginx/*.conf подхватываются без пересоздания контейнера.
@@ -141,27 +160,26 @@ jobs:
           # любой другой код (в т.ч. 404 на несуществующий путь) = Kestrel работает.
           # По HTTP nginx отвечает только редиректом, поэтому идём на HTTPS локально
           # (-k: при первом деплое сертификат ещё временный).
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             code=$(curl -sk -o /dev/null -w '%{http_code}' \
               --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/" || true)
             case "$code" in
               502|503|504|000) sleep 2 ;;
               *) echo "API отвечает (HTTP $code)"; break ;;
             esac
-            if [ "$i" -eq 30 ]; then
-              echo "API не поднялся за 60 секунд"
+            if [ "$i" -eq 60 ]; then
+              echo "API не поднялся за 2 минуты"
               docker compose logs --tail=100 api
               exit 1
             fi
           done
 
-          # Храним 5 последних сборок для отката, остальные удаляем (диск всего 20 ГБ).
-          docker images stathub-api --format '{{.Tag}}' \
-            | grep -v '^latest$' | tail -n +6 \
-            | xargs -r -I{} docker rmi "stathub-api:{}"
-          docker image prune -f
+          # Храним текущую и 4 предыдущие версии, остальные удаляем (диск всего 20 ГБ).
+          cd api/releases
+          ls -1t | grep -vx -e "$RELEASE" -e empty | tail -n +5 | xargs -r rm -rf
 
           # Если сертификат ещё временный — выпускаем настоящий (дальше его продлевает сервис certbot).
           # Ошибка здесь валит деплой намеренно: с временным сертификатом браузеры показывают предупреждение.
+          cd ~/stathub
           bash ssl.sh issue
           EOF

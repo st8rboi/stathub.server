@@ -16,6 +16,11 @@ public interface ITournamentTeamRepository
         Guid stageId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Все заявки команды (во всех этапах и турнирах) вместе с составами — только чтение.</summary>
+    Task<IReadOnlyList<TournamentTeam>> ListByTeamAsync(
+        Guid teamId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Команда этапа, за которую игрок заявлен сейчас. Нужна, чтобы не допустить игрока
     /// в две команды одного дивизиона: переход оформляется трансфером. В разных дивизионах

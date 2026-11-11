@@ -42,5 +42,8 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.EventsForReview).IsRequired();
 
         builder.HasIndex(m => m.StageId);
+        // Страница команды ищет матчи по любой из сторон: OR по двум индексам (bitmap OR в PostgreSQL).
+        builder.HasIndex(m => m.HomeTeamId);
+        builder.HasIndex(m => m.AwayTeamId);
     }
 }

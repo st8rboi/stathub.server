@@ -111,3 +111,55 @@ public sealed record PublicTournamentHeaderDto(
 public sealed record PublicTournamentStatisticsDto(
     PublicTournamentHeaderDto Tournament,
     IReadOnlyList<PlayerStatisticsRowDto> Rows);
+
+/// <summary>Шапка страницы команды.</summary>
+public sealed record PublicTeamDto(
+    Guid Id,
+    string Name,
+    string? City,
+    string? LogoUrl);
+
+/// <summary>
+/// Участие команды в этапе опубликованной лиги — пункт переключателя на странице команды.
+/// <see cref="Status"/> — статус заявки (Active/Withdrawn), null если заявки нет, а матчи есть.
+/// </summary>
+public sealed record PublicTeamParticipationDto(
+    Guid StageId,
+    string StageName,
+    Guid TournamentId,
+    string TournamentName,
+    string LeagueName,
+    string LeagueSlug,
+    string? LeagueLogoUrl,
+    string? Status);
+
+/// <summary>
+/// Игрок заявки команды на этап со статистикой за матчи команды в этом этапе.
+/// Отзаявленные и ушедшие трансфером остаются в списке: история не скрывается.
+/// </summary>
+public sealed record PublicTeamPlayerDto(
+    Guid PlayerId,
+    string FullName,
+    string? PhotoUrl,
+    DateOnly? BirthDate,
+    string Status,
+    DateOnly JoinedOn,
+    DateOnly? LeftOn,
+    int Matches,
+    int Goals,
+    int Assists,
+    int OwnGoals,
+    int YellowCards,
+    int RedCards);
+
+/// <summary>
+/// Страница команды: участия во всех опубликованных этапах и подробности по выбранному
+/// (по умолчанию — самому свежему): матчи, таблица этапа, состав со статистикой.
+/// </summary>
+public sealed record PublicTeamPageDto(
+    PublicTeamDto Team,
+    IReadOnlyList<PublicTeamParticipationDto> Participations,
+    PublicStageDto Stage,
+    IReadOnlyList<PublicMatchDto> Matches,
+    IReadOnlyList<StandingsRowDto> Standings,
+    IReadOnlyList<PublicTeamPlayerDto> Players);

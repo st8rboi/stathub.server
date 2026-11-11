@@ -19,6 +19,15 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Match>> GetByTeamIdAsync(Guid teamId, CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Matches
+            .AsNoTracking()
+            .Where(match => match.HomeTeamId == teamId || match.AwayTeamId == teamId)
+            .OrderBy(match => match.ScheduledTimeUtc)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Match>> GetByStatusAsync(
         IReadOnlyCollection<MatchStatus> statuses,
         CancellationToken cancellationToken = default)

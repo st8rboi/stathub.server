@@ -10,7 +10,8 @@ public sealed record TournamentTeamDetailsDto(
     Guid TournamentId,
     Guid TeamId,
     TournamentTeamStatus Status,
-    IReadOnlyList<PlayerRegistrationDto> Registrations)
+    IReadOnlyList<PlayerRegistrationDto> Registrations,
+    DateTime CreatedAtUtc)
 {
     internal static TournamentTeamDetailsDto From(TournamentTeam tournamentTeam) => new(
         tournamentTeam.Id,
@@ -21,5 +22,6 @@ public sealed record TournamentTeamDetailsDto(
         tournamentTeam.Registrations
             .OrderBy(registration => registration.JoinedOn)
             .Select(PlayerRegistrationDto.From)
-            .ToList());
+            .ToList(),
+        tournamentTeam.CreatedAtUtc);
 }

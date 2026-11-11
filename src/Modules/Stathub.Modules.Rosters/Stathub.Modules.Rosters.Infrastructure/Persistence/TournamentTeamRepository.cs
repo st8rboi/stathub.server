@@ -31,6 +31,16 @@ internal sealed class TournamentTeamRepository(RostersDbContext dbContext) : ITo
             .OrderBy(tournamentTeam => tournamentTeam.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<TournamentTeam>> ListByTeamAsync(
+        Guid teamId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.TournamentTeams
+            .AsNoTracking()
+            .Include(tournamentTeam => tournamentTeam.Registrations)
+            .Where(tournamentTeam => tournamentTeam.TeamId == teamId)
+            .OrderByDescending(tournamentTeam => tournamentTeam.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public async Task<Guid?> FindTeamIdWithActiveRegistrationAsync(
         Guid stageId,
         Guid playerId,

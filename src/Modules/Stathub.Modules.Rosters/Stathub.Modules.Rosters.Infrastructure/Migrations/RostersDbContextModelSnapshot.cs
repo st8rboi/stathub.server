@@ -74,6 +74,8 @@ namespace Stathub.Modules.Rosters.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TeamId");
+
                     b.HasIndex("TournamentId");
 
                     b.HasIndex("StageId", "TeamId")

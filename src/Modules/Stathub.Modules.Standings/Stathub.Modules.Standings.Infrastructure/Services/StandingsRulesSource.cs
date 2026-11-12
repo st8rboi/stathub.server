@@ -9,8 +9,11 @@ namespace Stathub.Modules.Standings.Infrastructure.Services;
 /// <summary>
 /// Адаптер «порт таблицы → читатель этапа модуля Leagues». Здесь же нейтральный
 /// <see cref="TiebreakerKind"/> превращается в критерий домена расчёта таблицы.
+/// Участники общей таблицы кругового этапа — команды, заявленные в дивизион (порт реализует модуль заявок).
 /// </summary>
-public sealed class StandingsRulesSource(IStagePublicReader stagePublicReader) : IStandingsRulesSource
+public sealed class StandingsRulesSource(
+    IStagePublicReader stagePublicReader,
+    IEnumerable<IDivisionTeamSource> divisionTeamSources) : IStandingsRulesSource
 {
     public async Task<StandingsRules?> GetAsync(Guid stageId, CancellationToken cancellationToken = default)
     {
@@ -25,16 +28,31 @@ public sealed class StandingsRulesSource(IStagePublicReader stagePublicReader) :
             .Select(Map)
             .ToList();
 
+        var groups = stage.Groups
+            .Select(group => new StandingsGroup(group.GroupId, group.Name, group.Order, group.TeamIds))
+            .ToList();
+
+        // Без групп общая таблица кругового этапа сразу показывает всех заявленных участников с нулями.
+        // В плей-офф таблицы по смыслу нет, поэтому туда весь дивизион не подмешиваем.
+        var teamIds = new HashSet<Guid>();
+        if (groups.Count == 0 && stage.FormatType == RoundFormat)
+        {
+            foreach (var source in divisionTeamSources)
+                teamIds.UnionWith(await source.GetTeamIdsAsync(stage.DivisionId, cancellationToken));
+        }
+
         return new StandingsRules(
             stage.WinPoints,
             stage.DrawPoints,
             stage.LossPoints,
             tiebreakers,
             stage.QualifiersCount,
-            stage.Groups
-                .Select(group => new StandingsGroup(group.GroupId, group.Name, group.Order, group.TeamIds))
-                .ToList());
+            groups,
+            teamIds.ToList());
     }
+
+    /// <summary>Строковое имя кругового формата в <see cref="StagePublicInfoDto.FormatType"/>.</summary>
+    private const string RoundFormat = "Round";
 
     private static StandingsTiebreaker Map(TiebreakerKind kind) => kind switch
     {

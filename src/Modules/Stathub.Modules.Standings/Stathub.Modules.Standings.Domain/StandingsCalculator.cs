@@ -12,7 +12,7 @@ public static class StandingsCalculator
 {
     /// <summary>
     /// Таблицы этапа: одна общая либо по одной на группу. В групповой таблице учитываются только
-    /// матчи этой группы, а её команды видны и без сыгранных матчей — с нулями.
+    /// матчи этой группы. Команды группы (или участники общей таблицы) видны и без сыгранных матчей — с нулями.
     /// </summary>
     public static IReadOnlyList<StandingsTable> CalculateTables(
         IReadOnlyCollection<StandingsMatch> matches,
@@ -24,7 +24,7 @@ public static class StandingsCalculator
         var qualifiers = Math.Max(rules.QualifiersCount ?? 0, 0);
 
         if (rules.Groups is not { Count: > 0 } groups)
-            return [new StandingsTable(null, null, Calculate(matches, rules), qualifiers)];
+            return [new StandingsTable(null, null, Calculate(matches, rules, rules.TeamIds ?? []), qualifiers)];
 
         return groups
             .OrderBy(group => group.Order)

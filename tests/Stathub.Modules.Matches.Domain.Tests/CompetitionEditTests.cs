@@ -20,7 +20,7 @@ public sealed class CompetitionEditTests
     {
         var tournament = Tournament.Create(Guid.NewGuid(), "Сезон", new DateOnly(2026, 4, 1));
         foreach (var name in stageNames)
-            tournament.AddStage(name, StageFormatType.Round, Points, Format);
+            tournament.AddStage(tournament.Divisions.Single().Id, name, StageFormatType.Round, Points, Format);
 
         return tournament;
     }
@@ -80,7 +80,7 @@ public sealed class CompetitionEditTests
         var stageId = tournament.Stages.Single().Id;
 
         var stage = tournament.UpdateStage(
-            stageId, "Группа А", StageFormatType.Round, new PointsRule(2, 1, 0), Format, stageHasMatches: false);
+            stageId, "Группа А", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasMatches: false);
 
         Assert.Equal("Группа А", stage.Name);
         Assert.Equal(2, stage.PointsRule.WinPoints);
@@ -93,7 +93,7 @@ public sealed class CompetitionEditTests
         var stageId = tournament.Stages.Single().Id;
 
         Assert.Throws<ConflictException>(() => tournament.UpdateStage(
-            stageId, "Группа", StageFormatType.Round, new PointsRule(2, 1, 0), Format, stageHasMatches: true));
+            stageId, "Группа", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasMatches: true));
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class CompetitionEditTests
         tournament.Start();
 
         Assert.Throws<ConflictException>(() => tournament.UpdateStage(
-            stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true), false));
+            stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true), null, false));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class CompetitionEditTests
         tournament.Start();
 
         var stage = tournament.UpdateStage(
-            stageId, "Группа А", StageFormatType.Round, new PointsRule(3, 1, 0), new MatchFormatRule(25, 2, false, true), true);
+            stageId, "Группа А", StageFormatType.Round, new PointsRule(3, 1, 0), new MatchFormatRule(25, 2, false, true), null, true);
 
         Assert.Equal("Группа А", stage.Name);
     }

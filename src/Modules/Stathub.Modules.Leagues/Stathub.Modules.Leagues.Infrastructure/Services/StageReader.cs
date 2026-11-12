@@ -21,9 +21,14 @@ public sealed class StageReader(IStageRepository repository) : IStageReader
         
         return new StageMatchRulesDto(
             TournamentId: stage.TournamentId,
+            DivisionId: stage.DivisionId,
             PeriodsCount: rule.PeriodsCount,
             PeriodDurationMinutes: rule.PeriodDurationMinutes,
             ExtraTimeEnabled: rule.ExtraTimeEnabled,
-            PenaltyShootoutEnabled: rule.PenaltyShootoutEnabled);
+            PenaltyShootoutEnabled: rule.PenaltyShootoutEnabled,
+            Groups: stage.Groups
+                .OrderBy(group => group.Order)
+                .Select(group => new StageGroupTeamsDto(group.Id, group.Name, group.Order, group.TeamIds.ToList()))
+                .ToList());
     }
 }

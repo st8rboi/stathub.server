@@ -10,14 +10,55 @@ namespace Stathub.Modules.Standings.Domain;
 /// </summary>
 public static class StandingsCalculator
 {
-    public static IReadOnlyList<StandingsEntry> Calculate(
+    /// <summary>
+    /// Таблицы этапа: одна общая либо по одной на группу. В групповой таблице учитываются только
+    /// матчи этой группы, а её команды видны и без сыгранных матчей — с нулями.
+    /// </summary>
+    public static IReadOnlyList<StandingsTable> CalculateTables(
         IReadOnlyCollection<StandingsMatch> matches,
         StandingsRules rules)
     {
         ArgumentNullException.ThrowIfNull(matches);
         ArgumentNullException.ThrowIfNull(rules);
 
+        var qualifiers = Math.Max(rules.QualifiersCount ?? 0, 0);
+
+        if (rules.Groups is not { Count: > 0 } groups)
+            return [new StandingsTable(null, null, Calculate(matches, rules), qualifiers)];
+
+        return groups
+            .OrderBy(group => group.Order)
+            .Select(group =>
+            {
+                var groupMatches = matches.Where(match => match.GroupId == group.Id).ToList();
+                return new StandingsTable(
+                    group.Id,
+                    group.Name,
+                    Calculate(groupMatches, rules, group.TeamIds),
+                    qualifiers);
+            })
+            .ToList();
+    }
+
+    public static IReadOnlyList<StandingsEntry> Calculate(
+        IReadOnlyCollection<StandingsMatch> matches,
+        StandingsRules rules) =>
+        Calculate(matches, rules, []);
+
+    /// <param name="teamIds">Команды, которые должны быть в таблице, даже если ещё не играли.</param>
+    public static IReadOnlyList<StandingsEntry> Calculate(
+        IReadOnlyCollection<StandingsMatch> matches,
+        StandingsRules rules,
+        IReadOnlyCollection<Guid> teamIds)
+    {
+        ArgumentNullException.ThrowIfNull(matches);
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(teamIds);
+
         var table = new Dictionary<Guid, Accumulator>();
+
+        foreach (var teamId in teamIds)
+            GetOrCreate(table, teamId);
 
         foreach (var match in matches)
         {

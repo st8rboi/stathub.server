@@ -40,6 +40,9 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<int>("CurrentPeriod")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("EventsForReview")
                         .HasColumnType("integer");
 
@@ -48,6 +51,9 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
 
                     b.Property<DateTime?>("FinishedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("HomeScore")
                         .HasColumnType("integer");
@@ -91,6 +97,8 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AwayTeamId");
+
+                    b.HasIndex("DivisionId");
 
                     b.HasIndex("HomeTeamId");
 

@@ -1,6 +1,7 @@
 using Stathub.Modules.Standings.Application.Dtos;
 using Stathub.Modules.Standings.Application.Interfaces;
 using Stathub.Modules.Standings.Domain;
+using Stathub.Modules.Standings.Domain.Models;
 using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Standings.Application;
@@ -22,17 +23,42 @@ public sealed class StandingsService(
             ?? throw new NotFoundException($"Правила этапа '{stageId}' не найдены.");
 
         var matches = await matchSource.GetFinishedMatchesAsync(stageId, cancellationToken);
-        var entries = StandingsCalculator.Calculate(matches, rules);
+        var tables = StandingsCalculator.CalculateTables(matches, rules);
 
-        var teamIds = entries.Select(entry => entry.TeamId).ToList();
+        var teamIds = tables
+            .SelectMany(table => table.Entries)
+            .Select(entry => entry.TeamId)
+            .Distinct()
+            .ToList();
         var teams = teamIds.Count == 0
             ? new Dictionary<Guid, StandingsTeamDto>()
             : await teamNameSource.GetTeamsAsync(teamIds, cancellationToken);
 
-        var rows = entries
-            .Select(entry =>
+        var tableRows = tables
+            .Select(table => (table, rows: ToRows(table, teams)))
+            .ToList();
+
+        return new StageStandingsDto(
+            stageId,
+            tableRows.SelectMany(item => item.rows).ToList(),
+            tableRows
+                .Where(item => item.table.GroupId is not null)
+                .Select(item => new StandingsGroupDto(
+                    item.table.GroupId!.Value,
+                    item.table.GroupName ?? string.Empty,
+                    item.rows))
+                .ToList(),
+            rules.QualifiersCount);
+    }
+
+    private static List<StandingsRowDto> ToRows(
+        StandingsTable table,
+        IReadOnlyDictionary<Guid, StandingsTeamDto> teams) =>
+        table.Entries
+            .Select((entry, index) =>
             {
                 var team = teams.GetValueOrDefault(entry.TeamId);
+                var position = index + 1;
 
                 return new StandingsRowDto(
                     entry.TeamId,
@@ -45,10 +71,9 @@ public sealed class StandingsService(
                     entry.GoalsFor,
                     entry.GoalsAgainst,
                     entry.GoalDifference,
-                    entry.Points);
+                    entry.Points,
+                    position,
+                    table.Qualifies(position));
             })
             .ToList();
-
-        return new StageStandingsDto(stageId, rows);
-    }
 }

@@ -7,6 +7,9 @@ public sealed record MatchDto(
     Guid Id,
     Guid StageId,
     Guid TournamentId,
+    Guid DivisionId,
+    // Группа кругового этапа; null — этап без групп
+    Guid? GroupId,
     Guid HomeTeamId,
     Guid AwayTeamId,
     DateTime CreatedAtUtc,
@@ -35,6 +38,8 @@ public sealed record MatchDto(
         match.Id,
         match.StageId,
         match.TournamentId,
+        match.DivisionId,
+        match.GroupId,
         match.HomeTeamId,
         match.AwayTeamId,
         match.CreatedAtUtc,

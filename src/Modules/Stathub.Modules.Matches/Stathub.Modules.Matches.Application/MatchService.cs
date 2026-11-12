@@ -2,6 +2,7 @@ using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Domain.Entities;
 using Stathub.Modules.Matches.Domain.Enums;
+using Stathub.Modules.Matches.Domain.Services;
 using Stathub.Modules.Matches.Domain.ValueObjects;
 using Stathub.Shared.Exceptions;
 
@@ -31,9 +32,23 @@ public sealed class MatchService(
         DateTime scheduledTimeUtc,
         CancellationToken cancellationToken = default)
     {
-        var (matchFormat, tournamentId) = await ResolveMatchFormatAsync(stageId, cancellationToken);
+        var stageFormat = await matchFormatProvider.GetByStageIdAsync(stageId, cancellationToken);
 
-        var match = Match.Create(stageId, tournamentId, homeTeamId, awayTeamId, scheduledTimeUtc, matchFormat);
+        var matchFormat = MatchFormat.Create(
+            periodsCount: stageFormat.PeriodsCount,
+            periodDurationMinutes: stageFormat.PeriodDurationMinutes,
+            extraTimeEnabled: stageFormat.ExtraTimeEnabled,
+            penaltyShootoutEnabled: stageFormat.PenaltyShootoutEnabled);
+
+        var match = Match.Create(
+            stageId,
+            stageFormat.TournamentId,
+            stageFormat.DivisionId,
+            homeTeamId,
+            awayTeamId,
+            scheduledTimeUtc,
+            matchFormat,
+            ResolveGroup(stageFormat, homeTeamId, awayTeamId));
 
         await repository.AddAsync(match, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -134,7 +149,15 @@ public sealed class MatchService(
     {
         var match = await GetOrThrowAsync(id, cancellationToken);
 
-        match.Update(scheduledTimeUtc, homeTeamId, awayTeamId, await HasEventsAsync(id, cancellationToken));
+        // Группа пересчитывается по новым командам: при замене матч может перейти в другую группу.
+        var stageFormat = await matchFormatProvider.GetByStageIdAsync(match.StageId, cancellationToken);
+
+        match.Update(
+            scheduledTimeUtc,
+            homeTeamId,
+            awayTeamId,
+            ResolveGroup(stageFormat, homeTeamId, awayTeamId),
+            await HasEventsAsync(id, cancellationToken));
         await repository.SaveChangesAsync(cancellationToken);
 
         return MatchDto.From(match);
@@ -171,21 +194,14 @@ public sealed class MatchService(
         await repository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException($"Матч '{id}' не найден.");
 
-    // Правила читаются через интерфейс потребителя (IMatchFormatProvider), реализацию даёт модуль Leagues.
-    // Тот же вызов отдаёт турнир этапа: матч запоминает сезон, к которому относится.
-    private async Task<(MatchFormat Format, Guid TournamentId)> ResolveMatchFormatAsync(
-        Guid stageId,
-        CancellationToken cancellationToken)
-    {
-        var stageFormat = await matchFormatProvider.GetByStageIdAsync(stageId, cancellationToken);
-
-        var format = MatchFormat.Create(
-            periodsCount: stageFormat.PeriodsCount,
-            periodDurationMinutes: stageFormat.PeriodDurationMinutes,
-            extraTimeEnabled: stageFormat.ExtraTimeEnabled,
-            penaltyShootoutEnabled: stageFormat.PenaltyShootoutEnabled);
-
-        return (format, stageFormat.TournamentId);
-    }
+    // Правила этапа читаются через интерфейс потребителя (IMatchFormatProvider), реализацию даёт
+    // модуль Leagues. Тот же вызов отдаёт турнир, дивизион и группы этапа.
+    private static Guid? ResolveGroup(MatchFormatDto stageFormat, Guid homeTeamId, Guid awayTeamId) =>
+        MatchGroupResolver.Resolve(
+            stageFormat.Groups
+                .Select(group => (group.GroupId, (IReadOnlyCollection<Guid>)group.TeamIds))
+                .ToList(),
+            homeTeamId,
+            awayTeamId);
     #endregion
 }

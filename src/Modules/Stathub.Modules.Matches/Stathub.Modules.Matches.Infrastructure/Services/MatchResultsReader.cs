@@ -18,7 +18,8 @@ internal sealed class MatchResultsReader(IMatchRepository repository) : IMatchRe
                 match.HomeTeamId,
                 match.AwayTeamId,
                 match.HomeScore,
-                match.AwayScore))
+                match.AwayScore,
+                match.GroupId))
             .ToList();
     }
 }

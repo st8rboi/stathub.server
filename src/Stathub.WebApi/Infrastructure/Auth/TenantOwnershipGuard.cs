@@ -14,6 +14,7 @@ public sealed class TenantOwnershipGuard(
     LeagueService leagueService,
     ITournamentReader tournamentReader,
     IStagePublicReader stagePublicReader,
+    IDivisionReader divisionReader,
     ICurrentUser currentUser)
 {
     public async Task EnsureLeagueAsync(Guid leagueId, CancellationToken cancellationToken = default)
@@ -30,6 +31,15 @@ public sealed class TenantOwnershipGuard(
             ?? throw new NotFoundException($"Турнир '{tournamentId}' не найден.");
 
         await EnsureLeagueAsync(tournament.LeagueId, cancellationToken);
+    }
+
+    /// <summary>Дивизион → турнир → лига: проверка владения для маршрутов `/divisions/{divisionId}/...`.</summary>
+    public async Task EnsureDivisionAsync(Guid divisionId, CancellationToken cancellationToken = default)
+    {
+        var division = await divisionReader.GetAsync(divisionId, cancellationToken)
+            ?? throw new NotFoundException($"Дивизион '{divisionId}' не найден.");
+
+        await EnsureTournamentAsync(division.TournamentId, cancellationToken);
     }
 
     /// <summary>Этап → турнир → лига: проверка владения для маршрутов `/stages/{stageId}/...`.</summary>

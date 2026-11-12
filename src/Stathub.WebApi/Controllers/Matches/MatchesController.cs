@@ -38,13 +38,15 @@ public sealed class MatchesController(
         // Новый матч создаётся только в рамках своего этапа.
         await matchAccessGuard.EnsureStageAsync(request.StageId, cancellationToken);
 
-        // В дивизионе играют только заявленные на этот этап команды: иначе в протокол
+        // На этапе играют только команды, заявленные в его дивизион: иначе в протокол
         // попадёт команда из другого дивизиона того же турнира.
-        if (!await rosterService.IsTeamRegisteredAsync(request.StageId, request.HomeTeamId, cancellationToken))
-            throw new DomainException("Хозяева не заявлены на этот этап.");
+        var divisionId = await rosterService.GetDivisionIdByStageAsync(request.StageId, cancellationToken);
 
-        if (!await rosterService.IsTeamRegisteredAsync(request.StageId, request.AwayTeamId, cancellationToken))
-            throw new DomainException("Гости не заявлены на этот этап.");
+        if (!await rosterService.IsTeamRegisteredAsync(divisionId, request.HomeTeamId, cancellationToken))
+            throw new DomainException("Хозяева не заявлены в этот дивизион.");
+
+        if (!await rosterService.IsTeamRegisteredAsync(divisionId, request.AwayTeamId, cancellationToken))
+            throw new DomainException("Гости не заявлены в этот дивизион.");
 
         var match = await matchService.CreateMatchAsync(
             request.StageId,
@@ -123,12 +125,12 @@ public sealed class MatchesController(
         await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
         var current = await matchService.GetByIdAsync(id, cancellationToken);
 
-        // Те же правила, что при создании: в дивизионе играют только заявленные на этап команды.
-        if (!await rosterService.IsTeamRegisteredAsync(current.StageId, request.HomeTeamId, cancellationToken))
-            throw new DomainException("Хозяева не заявлены на этот этап.");
+        // Те же правила, что при создании: играют только команды, заявленные в дивизион матча.
+        if (!await rosterService.IsTeamRegisteredAsync(current.DivisionId, request.HomeTeamId, cancellationToken))
+            throw new DomainException("Хозяева не заявлены в этот дивизион.");
 
-        if (!await rosterService.IsTeamRegisteredAsync(current.StageId, request.AwayTeamId, cancellationToken))
-            throw new DomainException("Гости не заявлены на этот этап.");
+        if (!await rosterService.IsTeamRegisteredAsync(current.DivisionId, request.AwayTeamId, cancellationToken))
+            throw new DomainException("Гости не заявлены в этот дивизион.");
 
         // Сначала все проверки, затем изменения: у матча и взносов разные БД-контексты.
         await feeService.EnsureMatchTeamsCanChangeAsync(id, request.HomeTeamId, request.AwayTeamId, cancellationToken);

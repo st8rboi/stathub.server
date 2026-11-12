@@ -44,9 +44,11 @@ as_root() {
 # Есть ли файл в certbot/conf (путь относительно него). Если nginx запущен — проверяем через exec в нём
 # (certbot/conf смонтирован в /etc/letsencrypt, exec идёт от root): новый контейнер не создаётся.
 # На диске сервера docker run может занимать минуты, а при деплое эта проверка выполняется всегда.
+# </dev/null обязателен: compose exec читает stdin даже с -T, а деплой передаёт скрипт через
+# `ssh … bash -s` — без перенаправления exec «съедает» остаток скрипта, и тот молча обрывается.
 conf_has() {
-    if docker compose exec -T nginx true >/dev/null 2>&1; then
-        docker compose exec -T nginx test -f "/etc/letsencrypt/$1"
+    if docker compose exec -T nginx true </dev/null >/dev/null 2>&1; then
+        docker compose exec -T nginx test -f "/etc/letsencrypt/$1" </dev/null
     else
         as_root alpine:3.20 test -f "/c/$1"
     fi

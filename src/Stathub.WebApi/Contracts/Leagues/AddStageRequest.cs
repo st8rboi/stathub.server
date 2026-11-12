@@ -3,17 +3,12 @@ using Stathub.Modules.Leagues.Domain.Enums;
 namespace Stathub.WebApi.Contracts.Leagues;
 
 /// <summary>
-/// Запрос на добавление нового этапа в лигу.
+/// Запрос на добавление нового этапа в дивизион турнира.
 /// </summary>
-/// <param name="Name"></param>
-/// <param name="FormatType"></param>
-/// <param name="WinPoints"></param>
-/// <param name="DrawPoints"></param>
-/// <param name="LossPoints"></param>
-/// <param name="PeriodDurationMinutes"></param>
-/// <param name="PeriodsCount"></param>
-/// <param name="ExtraTimeEnabled"></param>
-/// <param name="PenaltyShootoutEnabled"></param>
+/// <param name="DivisionId">Дивизион этапа; можно не указывать, пока дивизион в турнире один.</param>
+/// <param name="QualifiersCount">
+/// Сколько первых команд выходит в следующий этап (при группах — из каждой группы); только у кругового этапа.
+/// </param>
 public sealed record AddStageRequest(
     string Name,
     StageFormatType FormatType,
@@ -23,4 +18,6 @@ public sealed record AddStageRequest(
     int PeriodDurationMinutes,
     int PeriodsCount,
     bool ExtraTimeEnabled,
-    bool PenaltyShootoutEnabled);
+    bool PenaltyShootoutEnabled,
+    Guid? DivisionId = null,
+    int? QualifiersCount = null);

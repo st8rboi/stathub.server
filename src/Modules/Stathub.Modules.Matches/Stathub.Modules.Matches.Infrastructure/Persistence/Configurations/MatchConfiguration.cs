@@ -17,6 +17,9 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         // Турнир этапа — контекст заявок и составов; существующие матчи получают пустой Guid
         // миграцией, новые заполняются из этапа при создании.
         builder.Property(m => m.TournamentId).IsRequired();
+        // Дивизион этапа — граница статистики игроков; группа есть только у матчей группового этапа.
+        builder.Property(m => m.DivisionId).IsRequired();
+        builder.Property(m => m.GroupId);
         builder.Property(m => m.HomeTeamId).IsRequired();
         builder.Property(m => m.AwayTeamId).IsRequired();
         builder.Property(m => m.CreatedAtUtc).IsRequired();
@@ -42,6 +45,7 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.EventsForReview).IsRequired();
 
         builder.HasIndex(m => m.StageId);
+        builder.HasIndex(m => m.DivisionId);
         // Страница команды ищет матчи по любой из сторон: OR по двум индексам (bitmap OR в PostgreSQL).
         builder.HasIndex(m => m.HomeTeamId);
         builder.HasIndex(m => m.AwayTeamId);

@@ -6,10 +6,20 @@ using Stathub.Shared.Exceptions;
 namespace Stathub.Modules.Leagues.Domain.Entities;
 
 /// <summary>
-/// Представляет турнир в рамках лиги, содержащий информацию о его статусе, датах проведения и этапах.
+/// Представляет турнир в рамках лиги, содержащий информацию о его статусе, датах проведения,
+/// дивизионах и их этапах.
+/// <para>
+/// Структура: турнир → дивизион (независимое соревнование) → этап (круг, плей-офф) → группа.
+/// Уровней в данных всегда три, даже у простого чемпионата: дивизион по умолчанию создаётся
+/// вместе с турниром, а интерфейс прячет уровень, в котором один элемент.
+/// </para>
 /// </summary>
 public sealed class Tournament : AggregateRoot
 {
+    /// <summary>Название дивизиона, который создаётся вместе с турниром.</summary>
+    public const string DefaultDivisionName = "Основной дивизион";
+
+    private readonly List<Division> _divisions = [];
     private readonly List<Stage> _stages = [];
 
     public Guid LeagueId { get; private set; }
@@ -19,6 +29,9 @@ public sealed class Tournament : AggregateRoot
     public TournamentStatus Status { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
+    public IReadOnlyCollection<Division> Divisions => _divisions.AsReadOnly();
+
+    /// <summary>Этапы всех дивизионов турнира; дивизион этапа — <see cref="Stage.DivisionId"/>.</summary>
     public IReadOnlyCollection<Stage> Stages => _stages.AsReadOnly();
 
     private Tournament()
@@ -56,8 +69,52 @@ public sealed class Tournament : AggregateRoot
         if (endDate is not null && endDate < startDate)
             throw new DomainException("Tournament end date не может быть раньше его даты начала.");
 
-        return new Tournament(Guid.NewGuid(), leagueId, name.Trim(), startDate, endDate);
+        var tournament = new Tournament(Guid.NewGuid(), leagueId, name.Trim(), startDate, endDate);
+        tournament._divisions.Add(Division.Create(tournament.Id, 1, DefaultDivisionName));
+
+        return tournament;
     }
+
+    public Division AddDivision(string name)
+    {
+        if (Status != TournamentStatus.Scheduled)
+            throw new ConflictException(
+                $"Дивизион может быть добавлен только к турниру со статусом {TournamentStatus.Scheduled}.");
+
+        var division = Division.Create(Id, _divisions.Count + 1, name);
+        _divisions.Add(division);
+        return division;
+    }
+
+    public Division RenameDivision(Guid divisionId, string name)
+    {
+        var division = GetDivision(divisionId);
+        division.Rename(name);
+        return division;
+    }
+
+    /// <summary>
+    /// Удаление дивизиона вместе с его этапами. Проверка ссылок (заявки, матчи) — на вызывающем:
+    /// они живут в других модулях. Последний дивизион удалить нельзя — этапам негде было бы жить.
+    /// </summary>
+    public void RemoveDivision(Guid divisionId)
+    {
+        var division = GetDivision(divisionId);
+
+        if (_divisions.Count == 1)
+            throw new ConflictException("В турнире должен остаться хотя бы один дивизион.");
+
+        _stages.RemoveAll(stage => stage.DivisionId == divisionId);
+        _divisions.Remove(division);
+
+        var order = 1;
+        foreach (var remaining in _divisions.OrderBy(d => d.Order))
+            remaining.SetOrder(order++);
+    }
+
+    private Division GetDivision(Guid divisionId) =>
+        _divisions.FirstOrDefault(d => d.Id == divisionId)
+        ?? throw new NotFoundException($"Дивизион '{divisionId}' не найден в турнире '{Id}'.");
 
     /// <summary>Изменение названия и дат турнира.</summary>
     public void Update(string name, DateOnly startDate, DateOnly? endDate)
@@ -83,6 +140,7 @@ public sealed class Tournament : AggregateRoot
         StageFormatType formatType,
         PointsRule pointsRule,
         MatchFormatRule matchFormatRule,
+        int? qualifiersCount,
         bool stageHasMatches)
     {
         var stage = GetStage(stageId);
@@ -98,13 +156,14 @@ public sealed class Tournament : AggregateRoot
                     "Правила этапа нельзя менять: в нём уже есть матчи. Изменить можно только название.");
         }
 
-        stage.Update(name, formatType, pointsRule, matchFormatRule);
+        // Число выходящих дальше — пометка в таблице, а не правило матча: его можно менять всегда.
+        stage.Update(name, formatType, pointsRule, matchFormatRule, qualifiersCount);
         return stage;
     }
 
     /// <summary>
     /// Удаление этапа. Проверка ссылок (заявки, матчи) — на вызывающем: они живут в других модулях.
-    /// Оставшиеся этапы перенумеровываются, чтобы порядок шёл без пропусков.
+    /// Оставшиеся этапы дивизиона перенумеровываются, чтобы порядок шёл без пропусков.
     /// </summary>
     public void RemoveStage(Guid stageId)
     {
@@ -113,9 +172,27 @@ public sealed class Tournament : AggregateRoot
         _stages.Remove(stage);
 
         var order = 1;
-        foreach (var remaining in _stages.OrderBy(s => s.Order))
+        foreach (var remaining in _stages.Where(s => s.DivisionId == stage.DivisionId).OrderBy(s => s.Order))
             remaining.SetOrder(order++);
     }
+
+    public StageGroup AddStageGroup(
+        Guid stageId,
+        string name,
+        IReadOnlyCollection<Guid> teamIds,
+        bool stageHasMatches) =>
+        GetStage(stageId).AddGroup(name, teamIds, stageHasMatches);
+
+    public StageGroup UpdateStageGroup(
+        Guid stageId,
+        Guid groupId,
+        string name,
+        IReadOnlyCollection<Guid> teamIds,
+        bool stageHasMatches) =>
+        GetStage(stageId).UpdateGroup(groupId, name, teamIds, stageHasMatches);
+
+    public void RemoveStageGroup(Guid stageId, Guid groupId, bool stageHasMatches) =>
+        GetStage(stageId).RemoveGroup(groupId, stageHasMatches);
 
     private Stage GetStage(Guid stageId) =>
         _stages.FirstOrDefault(s => s.Id == stageId)
@@ -145,13 +222,21 @@ public sealed class Tournament : AggregateRoot
         Status = TournamentStatus.Cancelled;
     }
 
-    public Stage AddStage(string name, StageFormatType formatType, PointsRule pointsRule, MatchFormatRule matchFormatRule)
+    public Stage AddStage(
+        Guid divisionId,
+        string name,
+        StageFormatType formatType,
+        PointsRule pointsRule,
+        MatchFormatRule matchFormatRule,
+        int? qualifiersCount = null)
     {
         if (Status != TournamentStatus.Scheduled)
             throw new ConflictException($"Стадия может быть добавлена только к турниру со статусом {TournamentStatus.Scheduled}.");
 
-        var order = _stages.Count + 1;
-        var stage = Stage.Create(Id, order, name, formatType, pointsRule, matchFormatRule);
+        var division = GetDivision(divisionId);
+
+        var order = _stages.Count(s => s.DivisionId == division.Id) + 1;
+        var stage = Stage.Create(Id, division.Id, order, name, formatType, pointsRule, matchFormatRule, qualifiersCount);
         _stages.Add(stage);
         return stage;
     }

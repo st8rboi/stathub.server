@@ -7,12 +7,12 @@ namespace Stathub.Modules.Rosters.Application.Interfaces;
 /// </summary>
 public interface IRosterUsageSource
 {
-    /// <summary>Сколько матчей у команды на этапе (любого статуса, включая запланированные).</summary>
-    Task<int> CountTeamMatchesAsync(Guid stageId, Guid teamId, CancellationToken cancellationToken = default);
+    /// <summary>Сколько матчей у команды в дивизионе (любого статуса, включая запланированные).</summary>
+    Task<int> CountTeamMatchesAsync(Guid divisionId, Guid teamId, CancellationToken cancellationToken = default);
 
-    /// <summary>Есть ли у игрока события в матчах этапа за эту команду (включая отменённые).</summary>
+    /// <summary>Есть ли у игрока события в матчах дивизиона за эту команду (включая отменённые).</summary>
     Task<bool> PlayerHasEventsAsync(
-        Guid stageId,
+        Guid divisionId,
         Guid teamId,
         Guid playerId,
         CancellationToken cancellationToken = default);

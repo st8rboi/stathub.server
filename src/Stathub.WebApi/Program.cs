@@ -83,6 +83,7 @@ builder.Services.AddScoped<OwnedLeagueFilter>();
 builder.Services.AddScoped<OwnedTournamentFilter>();
 builder.Services.AddScoped<OwnedStageFilter>();
 builder.Services.AddScoped<StageRosterAccessFilter>();
+builder.Services.AddScoped<DivisionRosterAccessFilter>();
 builder.Services.AddScoped<MatchAccessGuard>();
 
 // «Мои матчи» судьи: назначения из Identity + матчи и команды из соответствующих модулей.

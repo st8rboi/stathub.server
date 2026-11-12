@@ -29,6 +29,7 @@ public static class LeaguesModule
         services.AddScoped<IStageReader, StageReader>();
         services.AddScoped<ITournamentReader, TournamentReader>();
         services.AddScoped<IStagePublicReader, StagePublicReader>();
+        services.AddScoped<IDivisionReader, DivisionReader>();
         services.AddScoped<IStageRepository, StageRepository>();
 
         return services;

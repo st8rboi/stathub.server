@@ -6,15 +6,15 @@ using Stathub.Modules.Statistics.Domain.Models;
 
 namespace Stathub.Modules.Statistics.Infrastructure.Services;
 
-/// <summary>Адаптер «порт статистики → читатель событий турнира модуля Matches».</summary>
+/// <summary>Адаптер «порт статистики → читатель событий дивизиона модуля Matches».</summary>
 public sealed class TournamentPlayerEventsSource(ITournamentPlayerEventReader reader)
     : ITournamentPlayerEventsSource
 {
-    public async Task<IReadOnlyList<TournamentPlayerEvent>> GetAsync(
-        Guid tournamentId,
+    public async Task<IReadOnlyList<TournamentPlayerEvent>> GetByDivisionAsync(
+        Guid divisionId,
         CancellationToken cancellationToken = default)
     {
-        var events = await reader.GetAsync(tournamentId, cancellationToken);
+        var events = await reader.GetByDivisionAsync(divisionId, cancellationToken);
 
         return events
             .Select(matchEvent => new TournamentPlayerEvent(

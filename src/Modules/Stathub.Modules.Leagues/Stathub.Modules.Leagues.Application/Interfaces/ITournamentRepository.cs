@@ -6,6 +6,9 @@ public interface ITournamentRepository
 {
     Task<Tournament?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Турнир, которому принадлежит дивизион (со всей структурой).</summary>
+    Task<Tournament?> GetByDivisionIdAsync(Guid divisionId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Tournament>> ListByLeagueAsync(Guid leagueId, CancellationToken cancellationToken = default);
 
     Task AddAsync(Tournament tournament, CancellationToken cancellationToken = default);

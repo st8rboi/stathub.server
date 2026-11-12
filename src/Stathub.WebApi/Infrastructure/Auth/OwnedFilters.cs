@@ -67,3 +67,20 @@ public sealed class StageRosterAccessFilter(MatchAccessGuard matchAccessGuard) :
         await next();
     }
 }
+
+/// <summary>
+/// Заявки дивизиона: организатор — по владению, судья — если у него есть матч в этом дивизионе.
+/// </summary>
+public sealed class DivisionRosterAccessFilter(MatchAccessGuard matchAccessGuard) : IAsyncActionFilter
+{
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (context.RouteData.Values.TryGetValue("divisionId", out var raw) &&
+            Guid.TryParse(raw?.ToString(), out var divisionId))
+        {
+            await matchAccessGuard.EnsureDivisionRosterAsync(divisionId, context.HttpContext.RequestAborted);
+        }
+
+        await next();
+    }
+}

@@ -199,7 +199,7 @@ public sealed class TournamentService(
 
     private async Task<League> GetLeagueOrThrowAsync(Guid leagueId, CancellationToken cancellationToken) =>
         await leagueRepository.GetByIdAsync(leagueId, cancellationToken)
-        ?? throw new NotFoundException($"League '{leagueId}' was not found.");
+        ?? throw new NotFoundException($"Лига '{leagueId}' не найдена.");
 
     // Турнир чужой лиги (несовпадение leagueId в URL) считаем ненайденным
     private async Task<Tournament> GetOrThrowAsync(Guid leagueId, Guid tournamentId, CancellationToken cancellationToken)
@@ -207,7 +207,7 @@ public sealed class TournamentService(
         var tournament = await repository.GetByIdAsync(tournamentId, cancellationToken);
 
         if (tournament is null || tournament.LeagueId != leagueId)
-            throw new NotFoundException($"Tournament '{tournamentId}' was not found in league '{leagueId}'.");
+            throw new NotFoundException($"Турнир '{tournamentId}' не найден в лиге '{leagueId}'.");
 
         return tournament;
     }

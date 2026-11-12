@@ -78,7 +78,18 @@ public sealed class DisciplineService(
     {
         var existing = await repository.FindActiveAsync(tournamentId, teamId, playerId, cancellationToken);
         if (existing is not null)
-            throw new ConflictException("У игрока уже есть действующая дисквалификация в этом турнире.");
+        {
+            // Отбывание считается на чтении, поэтому отбытая запись в БД остаётся незакрытой.
+            // Действующей она уже не является — закрываем её и выдаём новую; иначе после первой
+            // отбытой дисквалификации игроку нельзя было бы выдать следующую.
+            var served = existing.MatchesBanned is { } banned
+                && await teamMatches.CountFinishedSinceAsync(tournamentId, teamId, existing.IssuedAtUtc, cancellationToken) >= banned;
+
+            if (!served)
+                throw new ConflictException("У игрока уже есть действующая дисквалификация в этом турнире.");
+
+            existing.Lift();
+        }
 
         var disqualification = Disqualification.Issue(
             tournamentId,
@@ -132,9 +143,8 @@ public sealed class DisciplineService(
 
         foreach (var item in list)
         {
-            var served = item.MatchesBanned is null
-                ? await teamMatches.CountFinishedSinceAsync(item.TournamentId, item.TeamId, item.IssuedAtUtc, cancellationToken)
-                : await teamMatches.CountFinishedSinceAsync(item.TournamentId, item.TeamId, item.IssuedAtUtc, cancellationToken);
+            var served = await teamMatches.CountFinishedSinceAsync(
+                item.TournamentId, item.TeamId, item.IssuedAtUtc, cancellationToken);
 
             int? left = item.MatchesBanned is { } banned ? Math.Max(0, banned - served) : null;
             var active = item.IsActive && (left is null || left > 0);

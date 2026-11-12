@@ -193,6 +193,62 @@ public sealed class AccessControlTests(StathubApiFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, own.StatusCode);
     }
 
+    [Fact]
+    public async Task Admin_CannotGrantTenantWideRole_ThroughAssignments()
+    {
+        var scenario = await CreateScenarioAsync();
+        var admin = await scenario.Organizer.CreateStaffAsync("Admin");
+        var adminId = await (await admin.GetAsync("/auth/me")).ReadStringAsync("id");
+
+        // Назначение со скоупом Tenant сделало бы администратора организатором.
+        var asOrganizer = await admin.PostAsJsonAsync("/accounts/assignments", new
+        {
+            userId = adminId,
+            role = "Organizer",
+            scopeType = "Tenant"
+        });
+
+        var tenantWide = await admin.PostAsJsonAsync("/accounts/assignments", new
+        {
+            userId = adminId,
+            role = "Admin",
+            scopeType = "Tenant"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, asOrganizer.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, tenantWide.StatusCode);
+        Assert.Equal("Admin", await (await admin.GetAsync("/auth/me")).ReadStringAsync("role"));
+    }
+
+    [Fact]
+    public async Task RepeatedMatchAssignment_ReturnsSameAssignment()
+    {
+        var scenario = await CreateScenarioAsync();
+        var refereeId = await (await scenario.Referee.GetAsync("/auth/me")).ReadStringAsync("id");
+
+        var body = new
+        {
+            userId = refereeId,
+            role = "Referee",
+            scopeType = "Match",
+            scopeId = scenario.MatchId
+        };
+
+        // Судья уже назначен на матч в сценарии: повтор не должен создавать второе назначение.
+        var first = await scenario.Organizer.Client.PostAsJsonAsync("/accounts/assignments", body);
+        var second = await scenario.Organizer.Client.PostAsJsonAsync("/accounts/assignments", body);
+
+        Assert.Equal(await first.ReadIdAsync(), await second.ReadIdAsync());
+
+        using var list = JsonDocument.Parse(
+            await scenario.Organizer.Client.GetStringAsync("/accounts/assignments"));
+
+        Assert.Single(
+            list.RootElement.EnumerateArray(),
+            item => item.GetProperty("scopeType").GetString() == "Match"
+                    && item.GetProperty("scopeId").GetGuid() == scenario.MatchId);
+    }
+
     private async Task<Scenario> CreateScenarioAsync()
     {
         var organizer = await factory.CreateOrganizerAsync();

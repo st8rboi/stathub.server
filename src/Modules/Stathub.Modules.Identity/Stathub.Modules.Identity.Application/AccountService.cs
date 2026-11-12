@@ -122,28 +122,48 @@ public sealed class AccountService(
         Guid grantedByUserId,
         CancellationToken cancellationToken = default)
     {
+        // Роль на всю организацию выдаётся только при создании аккаунта (а организатора — платформой).
+        // Иначе администратор назначением со скоупом Tenant сделал бы организатором кого угодно, включая себя.
+        if (role == UserRole.Organizer)
+            throw new DomainException("Второго организатора выдаёт только платформа.");
+
+        if (scopeType == RoleScopeType.Tenant)
+            throw new DomainException(
+                "Роль на всю организацию задаётся при создании аккаунта. Назначить можно на матч, команду, лигу или турнир.");
+
         var userAssignments = await assignments.GetActiveByUserAsync(userId, cancellationToken);
         if (!userAssignments.Any(a => a.TenantId == tenantId))
             throw new DomainException("Пользователь не состоит в этой организации.");
 
-        var assignment = UserRoleAssignment.Create(
-            userId,
-            tenantId,
-            role,
-            scopeType,
-            scopeId,
-            grantedByUserId);
+        var user = await users.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundException("Пользователь не найден.");
 
-        await assignments.AddAsync(assignment, cancellationToken);
-        await assignments.SaveChangesAsync(cancellationToken);
+        if (!user.IsActive)
+            throw new DomainException("Аккаунт отключён — назначить его нельзя.");
 
-        var user = await users.GetByIdAsync(userId, cancellationToken)!;
+        // Идемпотентно: повторный запрос (двойной клик, повтор после обрыва связи) не плодит дубли.
+        var assignment = userAssignments.FirstOrDefault(a =>
+            a.TenantId == tenantId && a.Role == role && a.ScopeType == scopeType && a.ScopeId == scopeId);
+
+        if (assignment is null)
+        {
+            assignment = UserRoleAssignment.Create(
+                userId,
+                tenantId,
+                role,
+                scopeType,
+                scopeId,
+                grantedByUserId);
+
+            await assignments.AddAsync(assignment, cancellationToken);
+            await assignments.SaveChangesAsync(cancellationToken);
+        }
 
         return new AssignmentSummaryDto(
             assignment.Id,
             userId,
-            user?.Login ?? string.Empty,
-            user?.DisplayName ?? string.Empty,
+            user.Login,
+            user.DisplayName,
             role,
             scopeType,
             scopeId,

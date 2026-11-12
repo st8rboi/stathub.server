@@ -20,13 +20,23 @@ internal sealed class GlobalExceptionHandler(
             ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             // Слишком большое тело запроса (логотип) — отвечаем понятным текстом,
             // а не дефолтным «An error occurred while processing your request.».
-            BadHttpRequestException => (StatusCodes.Status413PayloadTooLarge, "Payload Too Large"),
+            BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>
+                (StatusCodes.Status413PayloadTooLarge, "Payload Too Large"),
+            // Остальные сбои чтения запроса (оборванное тело, таймаут) — со своим кодом, а не 413.
+            BadHttpRequestException badRequest => (badRequest.StatusCode, "Bad Request"),
             _ => (StatusCodes.Status500InternalServerError, "Internal Server Error")
         };
 
-        var detail = statusCode == StatusCodes.Status500InternalServerError
-            ? "Внутренняя ошибка сервера. Попробуйте ещё раз; если повторяется — сообщите администратору."
-            : exception.Message;
+        var detail = exception switch
+        {
+            _ when statusCode == StatusCodes.Status500InternalServerError =>
+                "Внутренняя ошибка сервера. Попробуйте ещё раз; если повторяется — сообщите администратору.",
+            // Тексты Kestrel английские и технические — заменяем на понятные.
+            BadHttpRequestException when statusCode == StatusCodes.Status413PayloadTooLarge =>
+                "Запрос слишком большой.",
+            BadHttpRequestException => "Запрос не удалось прочитать. Попробуйте ещё раз.",
+            _ => exception.Message
+        };
 
         if (statusCode == StatusCodes.Status500InternalServerError)
             logger.LogError(

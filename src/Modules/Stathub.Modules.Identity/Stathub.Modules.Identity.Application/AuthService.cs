@@ -33,11 +33,12 @@ public sealed class AuthService(
         var user = await users.GetByLoginAsync(User.NormalizeLogin(login), cancellationToken)
             ?? throw new DomainException("Неверный логин или пароль.");
 
-        if (!user.IsActive)
-            throw new DomainException("Аккаунт отключён.");
-
         if (string.IsNullOrWhiteSpace(password) || !passwordHasher.Verify(password, user.PasswordHash))
             throw new DomainException("Неверный логин или пароль.");
+
+        // После проверки пароля: иначе по одному логину можно узнать, что аккаунт существует и отключён.
+        if (!user.IsActive)
+            throw new DomainException("Аккаунт отключён.");
 
         var memberships = await LoadMembershipsAsync(user.Id, cancellationToken);
         if (memberships.Count == 0)
@@ -134,13 +135,21 @@ public sealed class AuthService(
         await refreshTokens.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<UserProfileDto> GetProfileAsync(Guid userId, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Профиль для текущей сессии. <paramref name="tenantId"/> — организация из токена: профиль
+    /// должен описывать ту же организацию, в которой работает сессия, а не «главную» у аккаунта.
+    /// </summary>
+    public async Task<UserProfileDto> GetProfileAsync(
+        Guid userId,
+        Guid? tenantId = null,
+        CancellationToken cancellationToken = default)
     {
         var user = await users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundException("Пользователь не найден.");
 
         var memberships = await LoadMembershipsAsync(userId, cancellationToken);
-        var primary = memberships.OrderBy(m => m.Role == UserRole.Organizer ? 0 : 1).FirstOrDefault()
+        var primary = memberships.FirstOrDefault(m => m.TenantId == tenantId)
+            ?? memberships.OrderBy(m => m.Role == UserRole.Organizer ? 0 : 1).FirstOrDefault()
             ?? throw new DomainException("У аккаунта нет доступа ни к одной организации.");
 
         return ToProfile(user, primary, memberships);

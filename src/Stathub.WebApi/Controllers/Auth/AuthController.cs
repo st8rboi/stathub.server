@@ -69,7 +69,10 @@ public sealed class AuthController(
     [HttpGet("me")]
     [Authorize]
     public async Task<ActionResult<UserProfileDto>> Me(CancellationToken cancellationToken) =>
-        Ok(await authService.GetProfileAsync(currentUser.UserId, cancellationToken));
+        Ok(await authService.GetProfileAsync(
+            currentUser.UserId,
+            currentUser.TenantId == Guid.Empty ? null : currentUser.TenantId,
+            cancellationToken));
 
     [HttpPost("change-password")]
     [Authorize]

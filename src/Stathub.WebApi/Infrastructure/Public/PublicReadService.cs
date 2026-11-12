@@ -178,6 +178,7 @@ public sealed class PublicReadService(
         var players = await GetPlayersAsync(playerIds, cancellationToken);
 
         var playerNames = players.ToDictionary(player => player.Id, player => player.FullName);
+        var playerPhotos = players.ToDictionary(player => player.Id, player => player.PhotoUrl);
 
         // Часы считаются по полному логу (с паузами), поэтому до фильтрации.
         var clock = MatchClock.Compute(state.Events
@@ -200,7 +201,8 @@ public sealed class PublicReadService(
                 item.matchEvent.RelatedPlayerId is { } relatedId ? playerNames.GetValueOrDefault(relatedId) : null,
                 item.matchEvent.TargetEventId,
                 item.mark?.Period,
-                item.mark?.ElapsedSeconds))
+                item.mark?.ElapsedSeconds,
+                item.matchEvent.PlayerId is { } photoPlayerId ? playerPhotos.GetValueOrDefault(photoPlayerId) : null))
             .ToList();
 
         return new PublicMatchPageDto(ToPublicMatch(state.Match, stage, teams), events);

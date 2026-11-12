@@ -7,6 +7,7 @@ using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Domain.Enums;
 using Stathub.Modules.Matches.Domain.Services;
 using Stathub.Modules.Players.Application;
+using Stathub.Modules.Players.Application.Dtos;
 using Stathub.Modules.Rosters.Application;
 using Stathub.Modules.Rosters.Application.Dtos;
 using Stathub.Modules.Rosters.Domain.Enums;
@@ -44,7 +45,48 @@ public sealed class PublicReadService(
         CancellationToken cancellationToken)
     {
         var leagues = await leagueService.ListPublishedAsync(query, city, cancellationToken);
-        return leagues.Select(ToPublicLeague).ToList();
+        if (leagues.Count < 2)
+            return leagues.Select(ToPublicLeague).ToList();
+
+        // Лиги, где сейчас играют, — первыми: иначе каталог, сайдбар и таблица на главной
+        // открываются на свежесозданных пустых лигах.
+        var activity = await GetLeagueActivityAsync(cancellationToken);
+
+        return leagues
+            .Select((league, index) => (league, index, at: activity.GetValueOrDefault(league.Slug)))
+            .OrderByDescending(item => item.at)
+            .ThenBy(item => item.index)
+            .Select(item => ToPublicLeague(item.league))
+            .ToList();
+    }
+
+    /// <summary>
+    /// «Активность» лиги — ближайший к сегодняшнему дню матч её опубликованных турниров:
+    /// сыгранные до сегодня и назначенные на ближайшую неделю. Чем свежее, тем выше лига.
+    /// </summary>
+    private async Task<Dictionary<string, DateTime>> GetLeagueActivityAsync(CancellationToken cancellationToken)
+    {
+        var horizon = DateTime.UtcNow.AddDays(7);
+        var slots = await matchService.ListSlotsAsync(cancellationToken);
+        var lastByStage = slots
+            .Where(slot => slot.ScheduledTimeUtc <= horizon)
+            .GroupBy(slot => slot.StageId)
+            .ToDictionary(group => group.Key, group => group.Max(slot => slot.ScheduledTimeUtc));
+
+        var published = new Dictionary<Guid, bool>();
+        var activity = new Dictionary<string, DateTime>();
+
+        foreach (var (stageId, lastUtc) in lastByStage)
+        {
+            var stage = await stagePublicReader.GetAsync(stageId, cancellationToken);
+            if (stage is null) continue;
+            if (!await IsPublishedAsync(stage.TournamentId, published, cancellationToken)) continue;
+
+            if (!activity.TryGetValue(stage.LeagueSlug, out var known) || lastUtc > known)
+                activity[stage.LeagueSlug] = lastUtc;
+        }
+
+        return activity;
     }
 
     public async Task<PublicLeaguePageDto> GetLeaguePageAsync(string slug, CancellationToken cancellationToken)
@@ -133,9 +175,7 @@ public sealed class PublicReadService(
             .Distinct()
             .ToList();
 
-        var players = playerIds.Count > 0
-            ? await playerService.GetByIdsAsync(playerIds, cancellationToken)
-            : [];
+        var players = await GetPlayersAsync(playerIds, cancellationToken);
 
         var playerNames = players.ToDictionary(player => player.Id, player => player.FullName);
 
@@ -208,8 +248,14 @@ public sealed class PublicReadService(
             if (stage is null) continue;
             if (!await IsPublishedAsync(stage.TournamentId, published, cancellationToken)) continue;
 
+            // Активность этапа — только начатые матчи: иначе заранее составленный плей-офф
+            // «свежее» идущего круга, и команда открывается на пустом этапе без результатов.
             var lastMatchUtc = matchesByStage.TryGetValue(id, out var stageMatches)
-                ? stageMatches.Max(match => match.ScheduledTimeUtc)
+                ? stageMatches
+                    .Where(match => match.Status is not (MatchStatus.Scheduled or MatchStatus.Cancelled))
+                    .Select(match => match.ScheduledTimeUtc)
+                    .DefaultIfEmpty(DateTime.MinValue)
+                    .Max()
                 : DateTime.MinValue;
             var registeredUtc = entriesByDivision.TryGetValue(stage.DivisionId, out var entry)
                 ? entry.CreatedAtUtc
@@ -286,7 +332,7 @@ public sealed class PublicReadService(
             .Select(group => group.OrderBy(registration => registration.JoinedOn).Last())
             .ToList();
 
-        var players = (await playerService.GetByIdsAsync(
+        var players = (await GetPlayersAsync(
                 registrations.Select(registration => registration.PlayerId).ToList(),
                 cancellationToken))
             .ToDictionary(player => player.Id);
@@ -491,12 +537,10 @@ public sealed class PublicReadService(
             : await playerStatisticsService.GetDivisionStatisticsAsync(selected.DivisionId, cancellationToken);
 
         // Фото — из модуля Players: Statistics о них не знает.
-        var photos = rows.Count == 0
-            ? new Dictionary<Guid, string?>()
-            : (await playerService.GetByIdsAsync(
-                    rows.Select(row => row.PlayerId).Distinct().ToList(),
-                    cancellationToken))
-                .ToDictionary(player => player.Id, player => player.PhotoUrl);
+        var photos = (await GetPlayersAsync(
+                rows.Select(row => row.PlayerId).Distinct().ToList(),
+                cancellationToken))
+            .ToDictionary(player => player.Id, player => player.PhotoUrl);
 
         return new PublicTournamentStatisticsDto(
             new PublicTournamentHeaderDto(
@@ -524,6 +568,22 @@ public sealed class PublicReadService(
             stages[stageId] = await stagePublicReader.GetAsync(stageId, cancellationToken);
 
         return stages;
+    }
+
+    /// <summary>
+    /// Игроки по списку id пачками: у PlayerService лимит на запрос (он рассчитан на админку),
+    /// а дивизион или протокол легко набирают больше — 12 команд по 15 человек это уже 180.
+    /// </summary>
+    private async Task<List<PlayerDto>> GetPlayersAsync(
+        IReadOnlyList<Guid> playerIds,
+        CancellationToken cancellationToken)
+    {
+        var players = new List<PlayerDto>(playerIds.Count);
+
+        foreach (var batch in playerIds.Chunk(PlayerService.MaxListLimit))
+            players.AddRange(await playerService.GetByIdsAsync(batch, cancellationToken));
+
+        return players;
     }
 
     private static List<Guid> CollectTeamIds(IEnumerable<MatchDto> matches) =>

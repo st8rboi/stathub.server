@@ -100,6 +100,7 @@ public sealed record PublicMatchDto(
 /// <summary>
 /// Событие протокола для витрины. <see cref="Period"/> и <see cref="ElapsedSeconds"/> — игровое
 /// время без пауз (null у событий жизненного цикла); <see cref="TargetEventId"/> — у отмены.
+/// <see cref="PlayerPhotoUrl"/> — фото игрока для плашек трансляционного оверлея.
 /// </summary>
 public sealed record PublicEventDto(
     Guid Id,
@@ -113,7 +114,8 @@ public sealed record PublicEventDto(
     string? RelatedPlayerName,
     Guid? TargetEventId,
     int? Period,
-    int? ElapsedSeconds);
+    int? ElapsedSeconds,
+    string? PlayerPhotoUrl);
 
 public sealed record PublicMatchPageDto(
     PublicMatchDto Match,

@@ -37,6 +37,13 @@ public sealed class PublicController(PublicReadService publicReadService) : Cont
         CancellationToken cancellationToken) =>
         Ok(await publicReadService.ListMatchesAsync(fromUtc, toUtc, cancellationToken));
 
+    /// <summary>Дни с матчами (в часовом поясе <paramref name="timeZone"/>, IANA) — полоса дат витрины.</summary>
+    [HttpGet("match-days")]
+    public async Task<ActionResult<IReadOnlyList<PublicMatchDayDto>>> GetMatchDays(
+        [FromQuery] string? timeZone,
+        CancellationToken cancellationToken) =>
+        Ok(await publicReadService.ListMatchDaysAsync(timeZone, cancellationToken));
+
     [HttpGet("matches/{id:guid}")]
     public async Task<ActionResult<PublicMatchPageDto>> GetMatch(
         Guid id,

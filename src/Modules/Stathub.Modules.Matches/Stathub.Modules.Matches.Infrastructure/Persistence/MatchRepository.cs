@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Domain.Entities;
 using Stathub.Modules.Matches.Domain.Enums;
@@ -62,6 +63,14 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
             .AsNoTracking()
             .Where(match => match.ScheduledTimeUtc >= fromUtc && match.ScheduledTimeUtc < toUtc)
             .OrderBy(match => match.ScheduledTimeUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MatchSlotDto>> GetSlotsAsync(CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Matches
+            .AsNoTracking()
+            .Select(match => new MatchSlotDto(match.StageId, match.ScheduledTimeUtc))
             .ToListAsync(cancellationToken);
     }
 

@@ -8,13 +8,17 @@ namespace Stathub.Modules.Standings.Domain.Models;
 /// </summary>
 /// <param name="QualifiersCount">Сколько первых команд выходит дальше (при группах — из каждой); null — никто.</param>
 /// <param name="Groups">Группы этапа; пусто или null — одна общая таблица.</param>
+/// <param name="TeamIds">
+/// Участники общей таблицы (без групп): попадают в неё с нулями ещё до первого матча.
+/// </param>
 public sealed record StandingsRules(
     int WinPoints,
     int DrawPoints,
     int LossPoints,
     IReadOnlyList<StandingsTiebreaker> Tiebreakers,
     int? QualifiersCount = null,
-    IReadOnlyList<StandingsGroup>? Groups = null)
+    IReadOnlyList<StandingsGroup>? Groups = null,
+    IReadOnlyList<Guid>? TeamIds = null)
 {
     public static StandingsRules Default { get; } = new(
         WinPoints: 3,

@@ -41,6 +41,21 @@ public sealed class StandingsTests
     }
 
     [Fact]
+    public void CalculateTables_ShowsParticipantsWithoutMatchesWithZeros()
+    {
+        var rules = Classic with { TeamIds = [Alpha, Beta, Gamma] };
+        var matches = new[] { new StandingsMatch(Beta, Gamma, 1, 0) };
+
+        var table = Assert.Single(StandingsCalculator.CalculateTables(matches, rules));
+
+        Assert.Equal(3, table.Entries.Count);
+        Assert.Equal(Beta, table.Entries[0].TeamId);
+        var alpha = table.Entries.Single(row => row.TeamId == Alpha);
+        Assert.Equal(0, alpha.Played);
+        Assert.Equal(0, alpha.Points);
+    }
+
+    [Fact]
     public void Calculate_OrdersByGoalDifferenceWhenPointsEqual()
     {
         var matches = new[]

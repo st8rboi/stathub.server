@@ -134,6 +134,7 @@ public static class HttpResponseExtensions
 /// <summary>Организатор со своей организацией и хелперы для подготовки данных через API.</summary>
 public sealed class TestOrganizer(StathubApiFactory factory, HttpClient client)
 {
+    private readonly Dictionary<Guid, Guid> _divisionByStage = [];
     private Guid _leagueId;
 
     public HttpClient Client { get; } = client;
@@ -160,8 +161,9 @@ public sealed class TestOrganizer(StathubApiFactory factory, HttpClient client)
         })).ReadIdAsync();
     }
 
-    public async Task<Guid> CreateStageAsync(Guid tournamentId) =>
-        await (await Client.PostAsJsonAsync($"/leagues/{_leagueId}/tournaments/{tournamentId}/stages", new
+    public async Task<Guid> CreateStageAsync(Guid tournamentId)
+    {
+        var stageId = await (await Client.PostAsJsonAsync($"/leagues/{_leagueId}/tournaments/{tournamentId}/stages", new
         {
             name = "Group",
             formatType = "Round",
@@ -174,12 +176,28 @@ public sealed class TestOrganizer(StathubApiFactory factory, HttpClient client)
             penaltyShootoutEnabled = false
         })).ReadIdAsync();
 
+        // Дивизион не указан — этап попал в единственный дивизион турнира; запоминаем его для заявок.
+        using var tournament = JsonDocument.Parse(
+            await Client.GetStringAsync($"/leagues/{_leagueId}/tournaments/{tournamentId}"));
+
+        _divisionByStage[stageId] = tournament.RootElement.GetProperty("stages").EnumerateArray()
+            .Single(stage => stage.GetProperty("id").GetGuid() == stageId)
+            .GetProperty("divisionId").GetGuid();
+
+        return stageId;
+    }
+
+    /// <summary>Дивизион этапа: заявки команд принадлежат дивизиону, а не этапу.</summary>
+    public Guid GetDivisionId(Guid stageId) => _divisionByStage[stageId];
+
     public async Task<Guid> CreateTeamAsync() =>
         await (await Client.PostAsJsonAsync("/teams", new { name = $"FC {Guid.NewGuid():N}"[..12], city = "Perm" }))
             .ReadIdAsync();
 
+    /// <summary>Заявляет команду в дивизион, которому принадлежит этап.</summary>
     public async Task<Guid> RegisterTeamAsync(Guid stageId, Guid teamId) =>
-        await (await Client.PostAsJsonAsync($"/stages/{stageId}/teams", new { teamId })).ReadIdAsync();
+        await (await Client.PostAsJsonAsync($"/divisions/{GetDivisionId(stageId)}/teams", new { teamId }))
+            .ReadIdAsync();
 
     public async Task<Guid> CreatePlayerAsync() =>
         await (await Client.PostAsJsonAsync("/players", new { fullName = "Ivanov Ivan" })).ReadIdAsync();

@@ -20,6 +20,7 @@ public sealed class MatchEditTests
         Guid.NewGuid(),
         Guid.NewGuid(),
         Guid.NewGuid(),
+        Guid.NewGuid(),
         Kickoff,
         MatchFormat.Create(periodsCount: 2, periodDurationMinutes: 45, extraTimeEnabled: false, penaltyShootoutEnabled: false));
 
@@ -31,7 +32,7 @@ public sealed class MatchEditTests
         var away = Guid.NewGuid();
         var newTime = Kickoff.AddDays(1);
 
-        match.Update(newTime, home, away, hasEvents: false);
+        match.Update(newTime, home, away, groupId: null, hasEvents: false);
 
         Assert.Equal(newTime, match.ScheduledTimeUtc);
         Assert.Equal(home, match.HomeTeamId);
@@ -44,7 +45,7 @@ public sealed class MatchEditTests
         var match = CreateMatch();
         var team = Guid.NewGuid();
 
-        Assert.Throws<DomainException>(() => match.Update(Kickoff, team, team, hasEvents: false));
+        Assert.Throws<DomainException>(() => match.Update(Kickoff, team, team, groupId: null, hasEvents: false));
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public sealed class MatchEditTests
         var match = CreateMatch();
 
         Assert.Throws<ConflictException>(() =>
-            match.Update(Kickoff.AddDays(1), match.HomeTeamId, match.AwayTeamId, hasEvents: true));
+            match.Update(Kickoff.AddDays(1), match.HomeTeamId, match.AwayTeamId, groupId: null, hasEvents: true));
     }
 
     [Fact]
@@ -63,7 +64,7 @@ public sealed class MatchEditTests
         match.Start(Kickoff);
 
         Assert.Throws<ConflictException>(() =>
-            match.Update(Kickoff.AddDays(1), match.HomeTeamId, match.AwayTeamId, hasEvents: false));
+            match.Update(Kickoff.AddDays(1), match.HomeTeamId, match.AwayTeamId, groupId: null, hasEvents: false));
     }
 
     [Fact]

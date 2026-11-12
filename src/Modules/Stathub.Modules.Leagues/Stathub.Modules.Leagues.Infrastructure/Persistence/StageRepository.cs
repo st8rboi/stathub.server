@@ -13,6 +13,8 @@ internal sealed class StageRepository(LeaguesDbContext dbContext) : IStageReposi
         Guid id,
         CancellationToken cancellationToken = default) =>
         dbContext.Stages
+            .Include(s => s.TiebreakerRules)
+            .Include(s => s.Groups)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
     // Добавить стадию в БД

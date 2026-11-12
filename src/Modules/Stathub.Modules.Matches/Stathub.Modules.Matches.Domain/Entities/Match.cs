@@ -9,6 +9,8 @@ public sealed class Match : AggregateRoot
 {
     public Guid StageId { get; private set; } // Стадия (этап) турнира
     public Guid TournamentId { get; private set; } // Турнир (сезон) этапа — контекст заявок и составов
+    public Guid DivisionId { get; private set; } // Дивизион этапа — граница заявок и статистики игроков
+    public Guid? GroupId { get; private set; } // Группа кругового этапа; null — этап без групп
     public Guid HomeTeamId { get; private set; } // Первая команда
     public Guid AwayTeamId { get; private set; } // Вторая команда
 
@@ -45,6 +47,8 @@ public sealed class Match : AggregateRoot
         Guid id,
         Guid stageId,
         Guid tournamentId,
+        Guid divisionId,
+        Guid? groupId,
         Guid homeTeamId,
         Guid awayTeamId,
         DateTime scheduledTimeUtc,
@@ -53,6 +57,8 @@ public sealed class Match : AggregateRoot
         Id = id;
         StageId = stageId;
         TournamentId = tournamentId;
+        DivisionId = divisionId;
+        GroupId = groupId;
         HomeTeamId = homeTeamId;
         AwayTeamId = awayTeamId;
         ScheduledTimeUtc = scheduledTimeUtc;
@@ -74,15 +80,23 @@ public sealed class Match : AggregateRoot
     public static Match Create(
         Guid stageId,
         Guid tournamentId,
+        Guid divisionId,
         Guid homeTeamId,
         Guid awayTeamId,
         DateTime scheduledTimeUtc,
-        MatchFormat format)
+        MatchFormat format,
+        Guid? groupId = null)
     {
         if (stageId == Guid.Empty)
             throw new DomainException("StageId обязательное поле.");
         if (tournamentId == Guid.Empty)
             throw new DomainException("TournamentId обязательное поле.");
+        if (divisionId == Guid.Empty)
+            throw new DomainException("DivisionId обязательное поле.");
+        if (groupId == Guid.Empty)
+            throw new DomainException("GroupId указан некорректно.");
+        if (homeTeamId == awayTeamId)
+            throw new DomainException("Команда не может играть сама с собой.");
         if (homeTeamId == Guid.Empty)
             throw new DomainException("HomeTeamId обязательное поле.");
         if (awayTeamId == Guid.Empty)
@@ -96,6 +110,8 @@ public sealed class Match : AggregateRoot
             Guid.NewGuid(),
             stageId,
             tournamentId,
+            divisionId,
+            groupId,
             homeTeamId,
             awayTeamId,
             scheduledTimeUtc,
@@ -106,7 +122,12 @@ public sealed class Match : AggregateRoot
     /// Перенос матча и замена команд. Только пока матч не начат и по нему нет событий:
     /// протокол ссылается на команды, а судья мог уже начать вести матч офлайн.
     /// </summary>
-    public void Update(DateTime scheduledTimeUtc, Guid homeTeamId, Guid awayTeamId, bool hasEvents)
+    public void Update(
+        DateTime scheduledTimeUtc,
+        Guid homeTeamId,
+        Guid awayTeamId,
+        Guid? groupId,
+        bool hasEvents)
     {
         EnsureNotStarted(hasEvents, "Изменить");
 
@@ -120,6 +141,8 @@ public sealed class Match : AggregateRoot
         ScheduledTimeUtc = scheduledTimeUtc;
         HomeTeamId = homeTeamId;
         AwayTeamId = awayTeamId;
+        // Группа следует за командами: при замене команд матч может перейти в другую группу.
+        GroupId = groupId;
     }
 
     /// <summary>

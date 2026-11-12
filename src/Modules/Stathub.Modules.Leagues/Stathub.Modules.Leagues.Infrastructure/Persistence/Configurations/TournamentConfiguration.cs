@@ -22,6 +22,13 @@ internal sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournam
 
         builder.HasIndex(t => t.LeagueId);
 
+        builder.HasMany(t => t.Divisions)
+            .WithOne()
+            .HasForeignKey(d => d.TournamentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(t => t.Divisions).UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasMany(t => t.Stages)
             .WithOne()
             .HasForeignKey(s => s.TournamentId)

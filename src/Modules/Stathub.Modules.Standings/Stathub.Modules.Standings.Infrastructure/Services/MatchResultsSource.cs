@@ -18,7 +18,8 @@ public sealed class MatchResultsSource(IMatchResultsReader matchResultsReader) :
                 match.HomeTeamId,
                 match.AwayTeamId,
                 match.HomeScore,
-                match.AwayScore))
+                match.AwayScore,
+                match.GroupId))
             .ToList();
     }
 }

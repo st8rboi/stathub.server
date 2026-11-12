@@ -8,7 +8,7 @@ using Stathub.Modules.Matches.Infrastructure.Persistence;
 namespace Stathub.Modules.Matches.Infrastructure.Services;
 
 /// <summary>
-/// События игроков турнира одним запросом. Отмены вычисляются здесь же: в БД флага
+/// События игроков дивизиона одним запросом. Отмены вычисляются здесь же: в БД флага
 /// «отменено» нет, состояние выводится из лога (`EventVoided` → `TargetEventId`).
 /// </summary>
 internal sealed class TournamentPlayerEventReader(MatchesDbContext dbContext) : ITournamentPlayerEventReader
@@ -21,14 +21,14 @@ internal sealed class TournamentPlayerEventReader(MatchesDbContext dbContext) : 
         [MatchEventType.RedCard] = TournamentPlayerEventKind.RedCard
     };
 
-    public async Task<IReadOnlyList<TournamentPlayerEventDto>> GetAsync(
-        Guid tournamentId,
+    public async Task<IReadOnlyList<TournamentPlayerEventDto>> GetByDivisionAsync(
+        Guid divisionId,
         CancellationToken cancellationToken = default)
     {
         var events = await dbContext.MatchEvents
             .AsNoTracking()
             .Where(matchEvent => dbContext.Matches
-                .Any(match => match.Id == matchEvent.MatchId && match.TournamentId == tournamentId))
+                .Any(match => match.Id == matchEvent.MatchId && match.DivisionId == divisionId))
             .Select(matchEvent => new
             {
                 matchEvent.Id,

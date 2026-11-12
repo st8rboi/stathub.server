@@ -22,9 +22,11 @@ public sealed class MatchFormatProvider(
 
         return new MatchFormatDto(
             TournamentId: rules.TournamentId,
+            DivisionId: rules.DivisionId,
             PeriodsCount: rules.PeriodsCount,
             PeriodDurationMinutes: rules.PeriodDurationMinutes,
             ExtraTimeEnabled: rules.ExtraTimeEnabled,
-            PenaltyShootoutEnabled: rules.PenaltyShootoutEnabled);
+            PenaltyShootoutEnabled: rules.PenaltyShootoutEnabled,
+            Groups: rules.Groups.Select(group => new MatchGroupDto(group.GroupId, group.TeamIds)).ToList());
     }
 }

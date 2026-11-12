@@ -65,10 +65,14 @@ public sealed class PublicController(PublicReadService publicReadService) : Cont
         CancellationToken cancellationToken) =>
         Ok(await publicReadService.GetTeamPageAsync(id, stageId, cancellationToken));
 
-    /// <summary>Статистика игроков турнира: голы, автоголы, карточки и матчи с событиями.</summary>
+    /// <summary>
+    /// Статистика игроков: голы, автоголы, карточки и матчи с событиями. Считается по дивизиону
+    /// <paramref name="divisionId"/>; если он не указан — по первому дивизиону турнира.
+    /// </summary>
     [HttpGet("tournaments/{id:guid}/statistics")]
     public async Task<ActionResult<PublicTournamentStatisticsDto>> GetTournamentStatistics(
         Guid id,
+        [FromQuery] Guid? divisionId,
         CancellationToken cancellationToken) =>
-        Ok(await publicReadService.GetTournamentStatisticsAsync(id, cancellationToken));
+        Ok(await publicReadService.GetTournamentStatisticsAsync(id, divisionId, cancellationToken));
 }

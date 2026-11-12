@@ -71,6 +71,10 @@ internal sealed class MatchCompetitionUsageSource(MatchesDbContext dbContext) : 
         return count > 0 ? $"матчи: {count}" : null;
     }
 
+    // Матчи дивизиона проверяются по его этапам (GetStageUsageAsync): так в ответе видно, в каком этапе они есть.
+    public Task<string?> GetDivisionUsageAsync(Guid divisionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
     public async Task<string?> GetStageUsageAsync(Guid stageId, CancellationToken cancellationToken = default)
     {
         var count = await dbContext.Matches.CountAsync(match => match.StageId == stageId, cancellationToken);
@@ -82,23 +86,23 @@ internal sealed class MatchCompetitionUsageSource(MatchesDbContext dbContext) : 
         dbContext.Matches.AnyAsync(match => match.StageId == stageId, cancellationToken);
 }
 
-/// <summary>Матчи и события команды на этапе — для проверки перед удалением заявок.</summary>
+/// <summary>Матчи и события команды в дивизионе — для проверки перед удалением заявок.</summary>
 internal sealed class MatchRosterUsageSource(MatchesDbContext dbContext) : IRosterUsageSource
 {
-    public Task<int> CountTeamMatchesAsync(Guid stageId, Guid teamId, CancellationToken cancellationToken = default) =>
+    public Task<int> CountTeamMatchesAsync(Guid divisionId, Guid teamId, CancellationToken cancellationToken = default) =>
         dbContext.Matches.CountAsync(
-            match => match.StageId == stageId && (match.HomeTeamId == teamId || match.AwayTeamId == teamId),
+            match => match.DivisionId == divisionId && (match.HomeTeamId == teamId || match.AwayTeamId == teamId),
             cancellationToken);
 
     // Отменённые события тоже считаются: лог матча неизменяем, ссылка на игрока в нём остаётся.
     public Task<bool> PlayerHasEventsAsync(
-        Guid stageId,
+        Guid divisionId,
         Guid teamId,
         Guid playerId,
         CancellationToken cancellationToken = default) =>
         dbContext.MatchEvents.AnyAsync(
             matchEvent => matchEvent.TeamId == teamId
                           && (matchEvent.PlayerId == playerId || matchEvent.RelatedPlayerId == playerId)
-                          && dbContext.Matches.Any(match => match.Id == matchEvent.MatchId && match.StageId == stageId),
+                          && dbContext.Matches.Any(match => match.Id == matchEvent.MatchId && match.DivisionId == divisionId),
             cancellationToken);
 }

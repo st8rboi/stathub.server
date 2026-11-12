@@ -18,15 +18,28 @@ public sealed record PublicStageSummaryDto(
     Guid Id,
     int Order,
     string Name,
-    string FormatType);
+    string FormatType,
+    Guid DivisionId);
 
+/// <summary>Дивизион турнира с этапами. Если дивизион в турнире один, витрина его не показывает.</summary>
+public sealed record PublicDivisionDto(
+    Guid Id,
+    int Order,
+    string Name,
+    IReadOnlyList<PublicStageSummaryDto> Stages);
+
+/// <summary>
+/// Турнир на странице лиги. <see cref="Divisions"/> — дерево «дивизион → этапы»,
+/// <see cref="Stages"/> — те же этапы плоским списком.
+/// </summary>
 public sealed record PublicTournamentDto(
     Guid Id,
     string Name,
     DateOnly StartDate,
     DateOnly? EndDate,
     string Status,
-    IReadOnlyList<PublicStageSummaryDto> Stages);
+    IReadOnlyList<PublicStageSummaryDto> Stages,
+    IReadOnlyList<PublicDivisionDto> Divisions);
 
 public sealed record PublicLeaguePageDto(
     PublicLeagueDto League,
@@ -44,7 +57,13 @@ public sealed record PublicStageDto(
     string? LeagueLogoUrl,
     int WinPoints,
     int DrawPoints,
-    int LossPoints);
+    int LossPoints,
+    Guid DivisionId,
+    string DivisionName,
+    // Сколько дивизионов в турнире: при одном уровень дивизиона на витрине скрыт.
+    int DivisionsCount,
+    // Сколько первых команд выходит дальше (при группах — из каждой); null — никто.
+    int? QualifiersCount);
 
 /// <summary>День с матчами в часовом поясе зрителя — вкладка полосы дат на главной.</summary>
 public sealed record PublicMatchDayDto(DateOnly Date, int Count);
@@ -74,7 +93,9 @@ public sealed record PublicMatchDto(
     DateTime? PausedAtUtc,
     long PeriodPausedMilliseconds,
     // Длительность периода по регламенту матча: витрина считает минуту как «26'» во втором тайме.
-    int PeriodDurationMinutes);
+    int PeriodDurationMinutes,
+    // Дивизион матча; null, если дивизион в турнире один и показывать его незачем.
+    string? DivisionName);
 
 /// <summary>
 /// Событие протокола для витрины. <see cref="Period"/> и <see cref="ElapsedSeconds"/> — игровое
@@ -98,10 +119,17 @@ public sealed record PublicMatchPageDto(
     PublicMatchDto Match,
     IReadOnlyList<PublicEventDto> Events);
 
+/// <summary>
+/// Страница этапа. <see cref="StandingsGroups"/> заполнен у группового этапа (тогда
+/// <see cref="Standings"/> — те же строки подряд); <see cref="DivisionStages"/> — этапы
+/// того же дивизиона для переключателя «круг / плей-офф».
+/// </summary>
 public sealed record PublicStagePageDto(
     PublicStageDto Stage,
     IReadOnlyList<PublicMatchDto> Matches,
-    IReadOnlyList<StandingsRowDto> Standings);
+    IReadOnlyList<StandingsRowDto> Standings,
+    IReadOnlyList<StandingsGroupDto> StandingsGroups,
+    IReadOnlyList<PublicStageSummaryDto> DivisionStages);
 
 /// <summary>Шапка турнира на странице статистики: лига видна для навигации.</summary>
 public sealed record PublicTournamentHeaderDto(
@@ -111,9 +139,19 @@ public sealed record PublicTournamentHeaderDto(
     string LeagueSlug,
     string? LeagueLogoUrl);
 
+/// <summary>Дивизион в переключателе статистики.</summary>
+public sealed record PublicDivisionRefDto(Guid Id, string Name, int Order);
+
+/// <summary>
+/// Статистика игроков одного дивизиона турнира (<see cref="DivisionId"/>): дивизионы — независимые
+/// соревнования, общий список бомбардиров на турнир не строится. <see cref="Divisions"/> — все
+/// дивизионы турнира для переключателя.
+/// </summary>
 public sealed record PublicTournamentStatisticsDto(
     PublicTournamentHeaderDto Tournament,
-    IReadOnlyList<PlayerStatisticsRowDto> Rows);
+    IReadOnlyList<PlayerStatisticsRowDto> Rows,
+    Guid? DivisionId,
+    IReadOnlyList<PublicDivisionRefDto> Divisions);
 
 /// <summary>Шапка страницы команды.</summary>
 public sealed record PublicTeamDto(
@@ -134,10 +172,13 @@ public sealed record PublicTeamParticipationDto(
     string LeagueName,
     string LeagueSlug,
     string? LeagueLogoUrl,
-    string? Status);
+    string? Status,
+    Guid DivisionId,
+    // null, если дивизион в турнире один
+    string? DivisionName);
 
 /// <summary>
-/// Игрок заявки команды на этап со статистикой за матчи команды в этом этапе.
+/// Игрок заявки команды в дивизион со статистикой за матчи команды во всех этапах дивизиона.
 /// Отзаявленные и ушедшие трансфером остаются в списке: история не скрывается.
 /// </summary>
 public sealed record PublicTeamPlayerDto(
@@ -157,7 +198,7 @@ public sealed record PublicTeamPlayerDto(
 
 /// <summary>
 /// Страница команды: участия во всех опубликованных этапах и подробности по выбранному
-/// (по умолчанию — самому свежему): матчи, таблица этапа, состав со статистикой.
+/// (по умолчанию — самому свежему): матчи и таблица этапа, состав дивизиона со статистикой.
 /// </summary>
 public sealed record PublicTeamPageDto(
     PublicTeamDto Team,
@@ -165,4 +206,5 @@ public sealed record PublicTeamPageDto(
     PublicStageDto Stage,
     IReadOnlyList<PublicMatchDto> Matches,
     IReadOnlyList<StandingsRowDto> Standings,
-    IReadOnlyList<PublicTeamPlayerDto> Players);
+    IReadOnlyList<PublicTeamPlayerDto> Players,
+    IReadOnlyList<StandingsGroupDto> StandingsGroups);

@@ -13,17 +13,17 @@ internal sealed class TournamentTeamConfiguration : IEntityTypeConfiguration<Tou
         builder.HasKey(tournamentTeam => tournamentTeam.Id);
         builder.Property(tournamentTeam => tournamentTeam.Id).ValueGeneratedNever();
 
-        builder.Property(tournamentTeam => tournamentTeam.StageId).IsRequired();
+        builder.Property(tournamentTeam => tournamentTeam.DivisionId).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.TournamentId).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.TeamId).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.Status).IsRequired();
         builder.Property(tournamentTeam => tournamentTeam.CreatedAtUtc).IsRequired();
 
-        // Команда заявляется один раз на этап. В разных дивизионах того же турнира
-        // одна и та же команда может играть — это отдельные заявки.
-        builder.HasIndex(tournamentTeam => new { tournamentTeam.StageId, tournamentTeam.TeamId }).IsUnique();
+        // Команда заявляется в дивизион один раз. То, что она играет только в одном дивизионе
+        // турнира, проверяет сервис заявок.
+        builder.HasIndex(tournamentTeam => new { tournamentTeam.DivisionId, tournamentTeam.TeamId }).IsUnique();
         builder.HasIndex(tournamentTeam => tournamentTeam.TournamentId);
-        // Страница команды: все заявки клуба. Уникальный (StageId, TeamId) тут не помогает — TeamId второй.
+        // Страница команды: все заявки клуба. Уникальный (DivisionId, TeamId) тут не помогает — TeamId второй.
         builder.HasIndex(tournamentTeam => tournamentTeam.TeamId);
 
         builder

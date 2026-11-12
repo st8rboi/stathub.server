@@ -75,12 +75,17 @@ public sealed class AccessControlTests(StathubApiFactory factory)
         var playerId = await scenario.Organizer.CreatePlayerAsync();
         var newTeamId = await scenario.Organizer.CreateTeamAsync();
         var referee = scenario.Referee;
-        var stage = $"/stages/{scenario.StageId}";
+        // Читать состав можно и по этапу матча, и по дивизиону; менять — только по дивизиону.
+        var stageRoute = $"/stages/{scenario.StageId}";
+        var stage = $"/divisions/{scenario.Organizer.GetDivisionId(scenario.StageId)}";
 
-        Assert.Equal(HttpStatusCode.OK, (await referee.GetAsync($"{stage}/teams")).StatusCode);
-        Assert.Equal(
-            HttpStatusCode.OK,
-            (await referee.GetAsync($"{stage}/teams/{scenario.HomeRegistrationId}")).StatusCode);
+        foreach (var route in new[] { stageRoute, stage })
+        {
+            Assert.Equal(HttpStatusCode.OK, (await referee.GetAsync($"{route}/teams")).StatusCode);
+            Assert.Equal(
+                HttpStatusCode.OK,
+                (await referee.GetAsync($"{route}/teams/{scenario.HomeRegistrationId}")).StatusCode);
+        }
 
         var writes = new[]
         {
@@ -110,7 +115,7 @@ public sealed class AccessControlTests(StathubApiFactory factory)
         var stranger = await factory.CreateOrganizerAsync();
 
         var response = await stranger.Client.PostAsync(
-            $"/stages/{scenario.StageId}/teams/{scenario.HomeRegistrationId}/withdraw",
+            $"/divisions/{scenario.Organizer.GetDivisionId(scenario.StageId)}/teams/{scenario.HomeRegistrationId}/withdraw",
             null);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);

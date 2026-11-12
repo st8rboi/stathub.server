@@ -8,7 +8,7 @@ using Stathub.Modules.Teams.Application.Interfaces;
 
 namespace Stathub.Modules.Rosters.Infrastructure.Services;
 
-/// <summary>Заявки команды на этапы турниров — для проверки перед правкой и удалением команды.</summary>
+/// <summary>Заявки команды в дивизионы турниров — для проверки перед правкой и удалением команды.</summary>
 internal sealed class RosterTeamUsageSource(
     RostersDbContext dbContext,
     ITournamentReader tournamentReader) : ITeamUsageSource
@@ -57,7 +57,7 @@ internal sealed class RosterPlayerUsageSource(
     }
 }
 
-/// <summary>Заявки команд на турнир и этап — для проверки перед удалением турнира или этапа.</summary>
+/// <summary>Заявки команд на турнир и дивизион — для проверки перед удалением турнира или дивизиона.</summary>
 internal sealed class RosterCompetitionUsageSource(RostersDbContext dbContext) : ICompetitionUsageSource
 {
     public async Task<string?> GetTournamentUsageAsync(Guid tournamentId, CancellationToken cancellationToken = default)
@@ -68,15 +68,32 @@ internal sealed class RosterCompetitionUsageSource(RostersDbContext dbContext) :
         return count > 0 ? $"заявки команд: {count}" : null;
     }
 
-    public async Task<string?> GetStageUsageAsync(Guid stageId, CancellationToken cancellationToken = default)
+    public async Task<string?> GetDivisionUsageAsync(Guid divisionId, CancellationToken cancellationToken = default)
     {
         var count = await dbContext.TournamentTeams
-            .CountAsync(tournamentTeam => tournamentTeam.StageId == stageId, cancellationToken);
+            .CountAsync(tournamentTeam => tournamentTeam.DivisionId == divisionId, cancellationToken);
 
         return count > 0 ? $"заявки команд: {count}" : null;
     }
 
+    // Заявки привязаны к дивизиону, а не к этапу: удалению этапа они не мешают.
+    public Task<string?> GetStageUsageAsync(Guid stageId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
     // Заявки не мешают менять правила этапа: формат матча и очки на них не влияют.
     public Task<bool> StageHasMatchesAsync(Guid stageId, CancellationToken cancellationToken = default) =>
         Task.FromResult(false);
+}
+
+/// <summary>Команды дивизиона для модуля Leagues: в группу этапа попадают только заявленные команды.</summary>
+internal sealed class RosterDivisionTeamSource(RostersDbContext dbContext) : IDivisionTeamSource
+{
+    public async Task<IReadOnlyCollection<Guid>> GetTeamIdsAsync(
+        Guid divisionId,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.TournamentTeams
+            .AsNoTracking()
+            .Where(tournamentTeam => tournamentTeam.DivisionId == divisionId)
+            .Select(tournamentTeam => tournamentTeam.TeamId)
+            .ToListAsync(cancellationToken);
 }

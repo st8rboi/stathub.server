@@ -136,8 +136,12 @@ jobs:
       - name: Restart services
         timeout-minutes: 20
         run: |
+          # Тело скрипта — в { }: bash читает его из stdin целиком до выполнения. Иначе любая
+          # команда, читающая stdin (docker compose exec), съедает остаток скрипта, и шаг «успешно»
+          # завершается, не переключив версию (так 11–12.11 не доехали три релиза).
           ssh "$TARGET" RELEASE="$RELEASE" bash -s <<'EOF'
           set -euo pipefail
+          {
           cd ~/stathub
           chmod +x backup.sh
           DOMAIN=xn--80aad5dfbv.xn--p1ai   # статхаб.рф
@@ -161,7 +165,7 @@ jobs:
           docker compose restart bot
           # Изменения в nginx/*.conf подхватываются без пересоздания контейнера.
           log 'nginx reload'
-          docker compose exec -T nginx nginx -s reload
+          docker compose exec -T nginx nginx -s reload </dev/null
 
           log 'ожидание API'
           # Ждём, пока API поднимется (миграции при старте). 502/503/504/000 = API ещё не отвечает,
@@ -192,5 +196,9 @@ jobs:
           cd ~/stathub
           log 'ssl.sh issue'
           bash ssl.sh issue
+
+          # Страховка: версия действительно переключена.
+          test "$(readlink api/current)" = "releases/$RELEASE"
           log 'готово'
+          }
           EOF

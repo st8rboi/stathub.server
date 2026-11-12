@@ -23,6 +23,10 @@ internal sealed class StagePublicReader(
         if (league is null)
             return null;
 
+        var division = tournament.Divisions.FirstOrDefault(item => item.Id == stage.DivisionId);
+        if (division is null)
+            return null;
+
         return new StagePublicInfoDto(
             stage.Id,
             stage.Name,
@@ -37,7 +41,16 @@ internal sealed class StagePublicReader(
             stage.PointsRule.WinPoints,
             stage.PointsRule.DrawPoints,
             stage.PointsRule.LossPoints,
-            stage.TiebreakerRules.OrderBy(rule => rule.Priority).Select(rule => Map(rule.Criterion)).ToList());
+            stage.TiebreakerRules.OrderBy(rule => rule.Priority).Select(rule => Map(rule.Criterion)).ToList(),
+            division.Id,
+            division.Name,
+            division.Order,
+            tournament.Divisions.Count,
+            stage.QualifiersCount,
+            stage.Groups
+                .OrderBy(group => group.Order)
+                .Select(group => new StageGroupTeamsDto(group.Id, group.Name, group.Order, group.TeamIds.ToList()))
+                .ToList());
     }
 
     private static TiebreakerKind Map(TiebreakerCriterion criterion) => criterion switch

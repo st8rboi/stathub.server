@@ -6,27 +6,29 @@ using Stathub.Modules.Statistics.Domain.Models;
 namespace Stathub.Modules.Statistics.Application;
 
 /// <summary>
-/// Статистика игроков по турниру. Считается на каждый запрос из протокола матчей —
-/// отдельного хранилища нет, поэтому показатель всегда совпадает с протоколом (doc §9.2).
+/// Статистика игроков по дивизиону. Дивизионы одного турнира — независимые соревнования,
+/// поэтому бомбардиры и карточки в каждом считаются отдельно; этапы дивизиона (круг, плей-офф)
+/// суммируются. Считается на каждый запрос из протокола матчей — отдельного хранилища нет,
+/// поэтому показатель всегда совпадает с протоколом (doc §9.2).
 /// </summary>
 public sealed class PlayerStatisticsService(
     ITournamentPlayerEventsSource eventsSource,
     IPlayerNameSource playerNameSource,
     ITeamBadgeSource teamBadgeSource)
 {
-    public async Task<IReadOnlyList<PlayerStatisticsRowDto>> GetTournamentStatisticsAsync(
-        Guid tournamentId,
+    public async Task<IReadOnlyList<PlayerStatisticsRowDto>> GetDivisionStatisticsAsync(
+        Guid divisionId,
         CancellationToken cancellationToken = default)
     {
-        var events = await eventsSource.GetAsync(tournamentId, cancellationToken);
+        var events = await eventsSource.GetByDivisionAsync(divisionId, cancellationToken);
         return await ToRowsAsync(PlayerStatisticsCalculator.Calculate(events), cancellationToken);
     }
 
     /// <summary>
-    /// Статистика игроков команды в указанных матчах турнира (страница команды: матчи этапа).
+    /// Статистика игроков команды в указанных матчах дивизиона (страница команды).
     /// </summary>
     public async Task<IReadOnlyList<PlayerStatisticsRowDto>> GetTeamStatisticsAsync(
-        Guid tournamentId,
+        Guid divisionId,
         Guid teamId,
         IReadOnlyCollection<Guid> matchIds,
         CancellationToken cancellationToken = default)
@@ -34,7 +36,7 @@ public sealed class PlayerStatisticsService(
         if (matchIds.Count == 0)
             return [];
 
-        var events = await eventsSource.GetAsync(tournamentId, cancellationToken);
+        var events = await eventsSource.GetByDivisionAsync(divisionId, cancellationToken);
         var entries = PlayerStatisticsCalculator.CalculateForTeam(events, teamId, matchIds.ToHashSet());
 
         return await ToRowsAsync(entries, cancellationToken);

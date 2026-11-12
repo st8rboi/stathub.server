@@ -82,4 +82,30 @@ public sealed class MatchAccessGuard(
         if (matches.All(match => match.StageId != stageId))
             throw new ForbiddenException("Этот этап вам не назначен.");
     }
+
+    /// <summary>
+    /// Доступ к заявкам дивизиона: организатор — по владению лигой, судья — если у него есть
+    /// назначенный матч в этом дивизионе.
+    /// </summary>
+    public async Task EnsureDivisionRosterAsync(Guid divisionId, CancellationToken cancellationToken = default)
+    {
+        if (currentUser.Role is UserRole.Organizer or UserRole.Admin)
+        {
+            await ownershipGuard.EnsureDivisionAsync(divisionId, cancellationToken);
+            return;
+        }
+
+        var assignedMatches = await accountService.GetAssignedMatchIdsAsync(
+            currentUser.UserId,
+            currentUser.TenantId,
+            cancellationToken);
+
+        if (assignedMatches.Count == 0)
+            throw new ForbiddenException("У вас нет назначенных матчей.");
+
+        var matches = await matchService.GetByIdsAsync(assignedMatches, cancellationToken);
+
+        if (matches.All(match => match.DivisionId != divisionId))
+            throw new ForbiddenException("Этот дивизион вам не назначен.");
+    }
 }

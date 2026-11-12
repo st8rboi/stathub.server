@@ -7,27 +7,34 @@ public interface ITournamentTeamRepository
     /// <summary>Заявка с составом (отслеживается EF: её меняют операции заявок).</summary>
     Task<TournamentTeam?> GetByIdAsync(Guid tournamentTeamId, CancellationToken cancellationToken = default);
 
-    Task<TournamentTeam?> GetByStageAndTeamAsync(
-        Guid stageId,
+    Task<TournamentTeam?> GetByDivisionAndTeamAsync(
+        Guid divisionId,
         Guid teamId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<TournamentTeam>> ListByStageAsync(
-        Guid stageId,
+    /// <summary>
+    /// Заявка команды в турнире независимо от дивизиона: команда играет только в одном дивизионе турнира.
+    /// </summary>
+    Task<TournamentTeam?> GetByTournamentAndTeamAsync(
+        Guid tournamentId,
+        Guid teamId,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Все заявки команды (во всех этапах и турнирах) вместе с составами — только чтение.</summary>
+    Task<IReadOnlyList<TournamentTeam>> ListByDivisionAsync(
+        Guid divisionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Все заявки команды (во всех дивизионах и турнирах) вместе с составами — только чтение.</summary>
     Task<IReadOnlyList<TournamentTeam>> ListByTeamAsync(
         Guid teamId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Команда этапа, за которую игрок заявлен сейчас. Нужна, чтобы не допустить игрока
-    /// в две команды одного дивизиона: переход оформляется трансфером. В разных дивизионах
-    /// того же турнира игрок играть может.
+    /// Заявка команды, за которую игрок сейчас заявлен в турнире. Нужна, чтобы не допустить игрока
+    /// в две команды одного турнира (в том числе в разных дивизионах): переход оформляется трансфером.
     /// </summary>
     Task<Guid?> FindTeamIdWithActiveRegistrationAsync(
-        Guid stageId,
+        Guid tournamentId,
         Guid playerId,
         CancellationToken cancellationToken = default);
 

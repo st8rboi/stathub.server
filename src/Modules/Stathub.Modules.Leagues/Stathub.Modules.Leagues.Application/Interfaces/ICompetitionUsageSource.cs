@@ -11,6 +11,9 @@ public interface ICompetitionUsageSource
     /// <summary>Описание ссылок на турнир (например, «матчи: 12») или null, если их нет.</summary>
     Task<string?> GetTournamentUsageAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
+    /// <summary>Описание ссылок на дивизион (заявки команд) или null, если их нет.</summary>
+    Task<string?> GetDivisionUsageAsync(Guid divisionId, CancellationToken cancellationToken = default);
+
     /// <summary>Описание ссылок на этап или null, если их нет.</summary>
     Task<string?> GetStageUsageAsync(Guid stageId, CancellationToken cancellationToken = default);
 

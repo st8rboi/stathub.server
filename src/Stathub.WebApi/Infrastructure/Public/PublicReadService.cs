@@ -34,6 +34,7 @@ public sealed class PublicReadService(
     TeamService teamService,
     PlayerService playerService,
     ITournamentReader tournamentReader,
+    IDivisionReader divisionReader,
     PlayerStatisticsService playerStatisticsService,
     RosterService rosterService)
 {
@@ -67,12 +68,13 @@ public sealed class PublicReadService(
                 details.StartDate,
                 details.EndDate,
                 details.Status.ToString(),
-                details.Stages
-                    .Select(stage => new PublicStageSummaryDto(
-                        stage.Id,
-                        stage.Order,
-                        stage.Name,
-                        stage.FormatType.ToString()))
+                details.Stages.Select(ToStageSummary).ToList(),
+                details.Divisions
+                    .Select(division => new PublicDivisionDto(
+                        division.Id,
+                        division.Order,
+                        division.Name,
+                        division.Stages.Select(ToStageSummary).ToList()))
                     .ToList()));
         }
 
@@ -96,7 +98,19 @@ public sealed class PublicReadService(
 
         var standings = await standingsService.GetStageStandingsAsync(stageId, cancellationToken);
 
-        return new PublicStagePageDto(ToPublicStage(stage), publicMatches, standings.Rows);
+        var tournament = await tournamentService.GetByIdAsync(stage.LeagueId, stage.TournamentId, cancellationToken);
+        var divisionStages = tournament.Divisions
+            .Where(division => division.Id == stage.DivisionId)
+            .SelectMany(division => division.Stages)
+            .Select(ToStageSummary)
+            .ToList();
+
+        return new PublicStagePageDto(
+            ToPublicStage(stage),
+            publicMatches,
+            standings.Rows,
+            standings.Groups,
+            divisionStages);
     }
 
     public async Task<PublicMatchPageDto> GetMatchPageAsync(Guid matchId, CancellationToken cancellationToken)
@@ -166,19 +180,29 @@ public sealed class PublicReadService(
         var entries = await rosterService.ListByTeamAsync(teamId, cancellationToken);
         var teamMatches = await matchService.ListByTeamAsync(teamId, cancellationToken);
 
-        // Этап может быть известен только по заявке (матчей ещё нет) или только по матчам
-        // (матч без заявки в старых данных) — участием считаем и то, и другое.
-        var entriesByStage = entries
-            .GroupBy(entry => entry.StageId)
+        // Заявка принадлежит дивизиону, матчи — этапам. Участие — это этап: с матчами команды,
+        // а если матчей в дивизионе ещё нет — первый этап дивизиона, куда команда заявлена.
+        var entriesByDivision = entries
+            .GroupBy(entry => entry.DivisionId)
             .ToDictionary(group => group.Key, group => group.First());
         var matchesByStage = teamMatches
             .GroupBy(match => match.StageId)
             .ToDictionary(group => group.Key, group => group.ToList());
 
+        var stageIds = matchesByStage.Keys.ToHashSet();
+        var divisionsWithMatches = teamMatches.Select(match => match.DivisionId).ToHashSet();
+
+        foreach (var divisionId in entriesByDivision.Keys.Where(id => !divisionsWithMatches.Contains(id)))
+        {
+            var division = await divisionReader.GetAsync(divisionId, cancellationToken);
+            if (division is { StageIds.Count: > 0 })
+                stageIds.Add(division.StageIds[0]);
+        }
+
         var published = new Dictionary<Guid, bool>();
         var participations = new List<(StagePublicInfoDto Stage, DateTime LastActivityUtc)>();
 
-        foreach (var id in entriesByStage.Keys.Union(matchesByStage.Keys))
+        foreach (var id in stageIds)
         {
             var stage = await stagePublicReader.GetAsync(id, cancellationToken);
             if (stage is null) continue;
@@ -187,7 +211,7 @@ public sealed class PublicReadService(
             var lastMatchUtc = matchesByStage.TryGetValue(id, out var stageMatches)
                 ? stageMatches.Max(match => match.ScheduledTimeUtc)
                 : DateTime.MinValue;
-            var registeredUtc = entriesByStage.TryGetValue(id, out var entry)
+            var registeredUtc = entriesByDivision.TryGetValue(stage.DivisionId, out var entry)
                 ? entry.CreatedAtUtc
                 : DateTime.MinValue;
 
@@ -211,11 +235,12 @@ public sealed class PublicReadService(
         var matches = matchesByStage.GetValueOrDefault(selected.StageId) ?? [];
         var teams = await GetTeamsAsync(CollectTeamIds(matches), cancellationToken);
         var standings = await standingsService.GetStageStandingsAsync(selected.StageId, cancellationToken);
+        // Состав и статистика — за весь дивизион: игрок один на круг и плей-офф.
         var players = await GetTeamPlayersAsync(
             teamId,
             selected,
-            entriesByStage.GetValueOrDefault(selected.StageId),
-            matches,
+            entriesByDivision.GetValueOrDefault(selected.DivisionId),
+            teamMatches.Where(match => match.DivisionId == selected.DivisionId).ToList(),
             cancellationToken);
 
         return new PublicTeamPageDto(
@@ -229,23 +254,26 @@ public sealed class PublicReadService(
                     item.Stage.LeagueName,
                     item.Stage.LeagueSlug,
                     item.Stage.LeagueLogoUrl,
-                    entriesByStage.GetValueOrDefault(item.Stage.StageId)?.Status.ToString()))
+                    entriesByDivision.GetValueOrDefault(item.Stage.DivisionId)?.Status.ToString(),
+                    item.Stage.DivisionId,
+                    DivisionLabel(item.Stage)))
                 .ToList(),
             ToPublicStage(selected),
             matches.Select(match => ToPublicMatch(match, selected, teams)).ToList(),
             standings.Rows,
-            players);
+            players,
+            standings.Groups);
     }
 
     /// <summary>
-    /// Состав команды на этапе со статистикой только за её матчи этого этапа.
+    /// Состав команды в дивизионе со статистикой за её матчи во всех этапах дивизиона.
     /// Игроки с событиями, но без заявки (заявку удалили как ошибочную), в состав не попадают.
     /// </summary>
     private async Task<IReadOnlyList<PublicTeamPlayerDto>> GetTeamPlayersAsync(
         Guid teamId,
         StagePublicInfoDto stage,
         TournamentTeamDetailsDto? entry,
-        IReadOnlyCollection<MatchDto> stageMatches,
+        IReadOnlyCollection<MatchDto> divisionMatches,
         CancellationToken cancellationToken)
     {
         if (entry is null || entry.Registrations.Count == 0)
@@ -264,9 +292,9 @@ public sealed class PublicReadService(
             .ToDictionary(player => player.Id);
 
         var statistics = (await playerStatisticsService.GetTeamStatisticsAsync(
-                stage.TournamentId,
+                stage.DivisionId,
                 teamId,
-                stageMatches.Select(match => match.Id).ToList(),
+                divisionMatches.Select(match => match.Id).ToList(),
                 cancellationToken))
             .ToDictionary(row => row.PlayerId);
 
@@ -435,9 +463,13 @@ public sealed class PublicReadService(
             throw new NotFoundException("Турнир не опубликован.");
     }
 
-    /// <summary>Статистика игроков по турниру — вкладка «Статистика» на витрине.</summary>
+    /// <summary>
+    /// Статистика игроков — вкладка «Статистика» на витрине. Считается по одному дивизиону турнира:
+    /// указанному или, по умолчанию, первому.
+    /// </summary>
     public async Task<PublicTournamentStatisticsDto> GetTournamentStatisticsAsync(
         Guid tournamentId,
+        Guid? divisionId,
         CancellationToken cancellationToken)
     {
         var info = await tournamentReader.GetPublicInfoAsync(tournamentId, cancellationToken)
@@ -447,7 +479,16 @@ public sealed class PublicReadService(
         if (!info.IsPublished)
             throw new NotFoundException($"Турнир '{tournamentId}' не опубликован.");
 
-        var rows = await playerStatisticsService.GetTournamentStatisticsAsync(tournamentId, cancellationToken);
+        var divisions = await divisionReader.ListByTournamentAsync(tournamentId, cancellationToken);
+
+        var selected = divisionId is { } requestedDivisionId
+            ? divisions.FirstOrDefault(division => division.DivisionId == requestedDivisionId)
+              ?? throw new NotFoundException($"Дивизион '{requestedDivisionId}' не найден в этом турнире.")
+            : divisions.FirstOrDefault();
+
+        var rows = selected is null
+            ? []
+            : await playerStatisticsService.GetDivisionStatisticsAsync(selected.DivisionId, cancellationToken);
 
         return new PublicTournamentStatisticsDto(
             new PublicTournamentHeaderDto(
@@ -456,7 +497,11 @@ public sealed class PublicReadService(
                 info.LeagueName,
                 info.LeagueSlug,
                 info.LeagueLogoUrl),
-            rows);
+            rows,
+            selected?.DivisionId,
+            divisions
+                .Select(division => new PublicDivisionRefDto(division.DivisionId, division.Name, division.Order))
+                .ToList());
     }
 
     private async Task<Dictionary<Guid, StagePublicInfoDto?>> LoadStagesAsync(
@@ -510,7 +555,22 @@ public sealed class PublicReadService(
         stage.LeagueLogoUrl,
         stage.WinPoints,
         stage.DrawPoints,
-        stage.LossPoints);
+        stage.LossPoints,
+        stage.DivisionId,
+        stage.DivisionName,
+        stage.DivisionsCount,
+        stage.QualifiersCount);
+
+    private static PublicStageSummaryDto ToStageSummary(StageDto stage) => new(
+        stage.Id,
+        stage.Order,
+        stage.Name,
+        stage.FormatType.ToString(),
+        stage.DivisionId);
+
+    // Единственный дивизион турнира зрителю не показываем: это технический уровень.
+    private static string? DivisionLabel(StagePublicInfoDto? stage) =>
+        stage is { DivisionsCount: > 1 } ? stage.DivisionName : null;
 
     private static PublicMatchDto ToPublicMatch(
         MatchDto match,
@@ -544,6 +604,7 @@ public sealed class PublicReadService(
             match.PeriodStartedAtUtc,
             match.PausedAtUtc,
             match.PeriodPausedMilliseconds,
-            match.PeriodDurationMinutes);
+            match.PeriodDurationMinutes,
+            DivisionLabel(stage));
     }
 }

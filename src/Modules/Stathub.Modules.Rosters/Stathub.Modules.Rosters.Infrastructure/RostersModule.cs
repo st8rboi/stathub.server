@@ -28,12 +28,13 @@ public static class RostersModule
                     "public")));
 
         services.AddScoped<ITournamentTeamRepository, TournamentTeamRepository>();
-        services.AddScoped<IStageInfoProvider, StageInfoProvider>();
+        services.AddScoped<IDivisionInfoProvider, DivisionInfoProvider>();
         services.AddScoped<ITeamExistsProvider, TeamExistsProvider>();
         services.AddScoped<IPlayerExistsProvider, PlayerExistsProvider>();
         services.AddScoped<ITeamUsageSource, RosterTeamUsageSource>();
         services.AddScoped<IPlayerUsageSource, RosterPlayerUsageSource>();
         services.AddScoped<ICompetitionUsageSource, RosterCompetitionUsageSource>();
+        services.AddScoped<IDivisionTeamSource, RosterDivisionTeamSource>();
         services.AddScoped<RosterService>();
 
         return services;

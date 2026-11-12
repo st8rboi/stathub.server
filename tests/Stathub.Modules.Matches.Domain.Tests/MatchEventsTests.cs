@@ -254,6 +254,7 @@ public sealed class MatchEventsTests
     private static Match CreateMatch() => Match.Create(
         Guid.NewGuid(),
         Guid.NewGuid(),
+        Guid.NewGuid(),
         HomeTeamId,
         AwayTeamId,
         DateTime.UtcNow,

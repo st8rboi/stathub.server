@@ -60,7 +60,7 @@ namespace Stathub.Modules.Rosters.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("StageId")
+                    b.Property<Guid>("DivisionId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Status")
@@ -78,7 +78,7 @@ namespace Stathub.Modules.Rosters.Infrastructure.Migrations
 
                     b.HasIndex("TournamentId");
 
-                    b.HasIndex("StageId", "TeamId")
+                    b.HasIndex("DivisionId", "TeamId")
                         .IsUnique();
 
                     b.ToTable("tournament_teams", "rosters");

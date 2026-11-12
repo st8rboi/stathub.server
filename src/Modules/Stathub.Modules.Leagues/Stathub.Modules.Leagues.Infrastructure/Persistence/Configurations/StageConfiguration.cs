@@ -14,6 +14,8 @@ internal sealed class StageConfiguration : IEntityTypeConfiguration<Stage>
         builder.Property(s => s.Id).ValueGeneratedNever();
 
         builder.Property(s => s.TournamentId).IsRequired();
+        builder.Property(s => s.DivisionId).IsRequired();
+        builder.Property(s => s.QualifiersCount);
         builder.Property(s => s.Order).IsRequired();
         builder.Property(s => s.Name).IsRequired().HasMaxLength(200);
         builder.Property(s => s.FormatType).IsRequired();
@@ -42,5 +44,18 @@ internal sealed class StageConfiguration : IEntityTypeConfiguration<Stage>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(s => s.TiebreakerRules).UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        // Дивизион этапа. Навигации нет: этапами владеет агрегат турнира, а дивизион — его же часть.
+        builder.HasOne<Division>()
+            .WithMany()
+            .HasForeignKey(s => s.DivisionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(s => s.Groups)
+            .WithOne()
+            .HasForeignKey(g => g.StageId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(s => s.Groups).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

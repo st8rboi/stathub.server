@@ -8,55 +8,55 @@ using Stathub.WebApi.Infrastructure.Auth;
 namespace Stathub.WebApi.Controllers.Rosters;
 
 /// <summary>
-/// Заявки команд и игроков на этап (группа/дивизион/плей-офф): маршруты вложены в этап,
-/// потому что в одном турнире бывает несколько параллельных дивизионов со своими командами.
+/// Заявки команд и игроков в дивизион: маршруты вложены в дивизион, потому что в одном турнире
+/// бывает несколько параллельных дивизионов со своими командами, а состав один на все этапы дивизиона.
 /// </summary>
 [ApiController]
-[Route("stages/{stageId:guid}")]
+[Route("divisions/{divisionId:guid}")]
 // Читать заявки может и судья (состав нужен для автора гола) — доступ проверяет фильтр.
 // Запись — только организатору (см. атрибуты на POST/PUT/DELETE ниже).
 [Authorize(Policy = AuthPolicies.TenantMember)]
-[ServiceFilter(typeof(StageRosterAccessFilter))]
+[ServiceFilter(typeof(DivisionRosterAccessFilter))]
 public sealed class RostersController(RosterService rosterService) : ControllerBase
 {
     [HttpPost("teams")]
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> AddTeam(
-        Guid stageId,
+        Guid divisionId,
         AddTournamentTeamRequest request,
         CancellationToken cancellationToken)
     {
-        var tournamentTeamId = await rosterService.AddTeamAsync(stageId, request.TeamId, cancellationToken);
+        var tournamentTeamId = await rosterService.AddTeamAsync(divisionId, request.TeamId, cancellationToken);
 
         return CreatedAtAction(
             nameof(GetTeam),
-            new { stageId, id = tournamentTeamId },
+            new { divisionId, id = tournamentTeamId },
             new { Id = tournamentTeamId });
     }
 
     [HttpGet("teams")]
     public async Task<ActionResult<IReadOnlyList<TournamentTeamDto>>> GetTeams(
-        Guid stageId,
+        Guid divisionId,
         CancellationToken cancellationToken) =>
-        Ok(await rosterService.ListTeamsAsync(stageId, cancellationToken));
+        Ok(await rosterService.ListTeamsAsync(divisionId, cancellationToken));
 
     [HttpGet("teams/{id:guid}")]
     public async Task<ActionResult<TournamentTeamDetailsDto>> GetTeam(
-        Guid stageId,
+        Guid divisionId,
         Guid id,
         CancellationToken cancellationToken) =>
-        Ok(await rosterService.GetTeamAsync(stageId, id, cancellationToken));
+        Ok(await rosterService.GetTeamAsync(divisionId, id, cancellationToken));
 
     [HttpPost("teams/{id:guid}/players")]
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<ActionResult<object>> RegisterPlayer(
-        Guid stageId,
+        Guid divisionId,
         Guid id,
         RegisterPlayerRequest request,
         CancellationToken cancellationToken)
     {
         var registrationId = await rosterService.RegisterPlayerAsync(
-            stageId,
+            divisionId,
             id,
             request.PlayerId,
             cancellationToken);
@@ -67,12 +67,12 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
     [HttpPost("teams/{id:guid}/players/{registrationId:guid}/release")]
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> ReleasePlayer(
-        Guid stageId,
+        Guid divisionId,
         Guid id,
         Guid registrationId,
         CancellationToken cancellationToken)
     {
-        await rosterService.ReleasePlayerAsync(stageId, id, registrationId, cancellationToken);
+        await rosterService.ReleasePlayerAsync(divisionId, id, registrationId, cancellationToken);
         return NoContent();
     }
 
@@ -80,33 +80,34 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
     [HttpDelete("teams/{id:guid}/players/{registrationId:guid}")]
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> DeleteRegistration(
-        Guid stageId,
+        Guid divisionId,
         Guid id,
         Guid registrationId,
         CancellationToken cancellationToken)
     {
-        await rosterService.DeleteRegistrationAsync(stageId, id, registrationId, cancellationToken);
+        await rosterService.DeleteRegistrationAsync(divisionId, id, registrationId, cancellationToken);
         return NoContent();
     }
 
-    /// <summary>Удаление ошибочной заявки команды. 409 — у команды есть матчи на этапе (снимите с этапа).</summary>
+    /// <summary>Удаление ошибочной заявки команды. 409 — у команды есть матчи в дивизионе (снимите с турнира).</summary>
     [HttpDelete("teams/{id:guid}")]
     [Authorize(Policy = AuthPolicies.Organizer)]
-    public async Task<IActionResult> DeleteTeam(Guid stageId, Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeleteTeam(Guid divisionId, Guid id, CancellationToken cancellationToken)
     {
-        await rosterService.DeleteTeamAsync(stageId, id, cancellationToken);
+        await rosterService.DeleteTeamAsync(divisionId, id, cancellationToken);
         return NoContent();
     }
 
+    /// <summary>Трансфер внутри турнира; команды могут быть из разных дивизионов.</summary>
     [HttpPost("transfers")]
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> TransferPlayer(
-        Guid stageId,
+        Guid divisionId,
         TransferPlayerRequest request,
         CancellationToken cancellationToken)
     {
         await rosterService.TransferPlayerAsync(
-            stageId,
+            divisionId,
             request.PlayerId,
             request.FromTeamId,
             request.ToTeamId,
@@ -118,11 +119,42 @@ public sealed class RostersController(RosterService rosterService) : ControllerB
     [HttpPost("teams/{id:guid}/withdraw")]
     [Authorize(Policy = AuthPolicies.Organizer)]
     public async Task<IActionResult> WithdrawTeam(
+        Guid divisionId,
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        await rosterService.WithdrawTeamAsync(divisionId, id, cancellationToken);
+        return NoContent();
+    }
+}
+
+/// <summary>
+/// Составы глазами этапа — только чтение. Матч знает свой этап, поэтому судья и экран матчей
+/// ищут составы по нему; сами заявки принадлежат дивизиону этапа (править — через
+/// <c>/divisions/{divisionId}/...</c>).
+/// </summary>
+[ApiController]
+[Route("stages/{stageId:guid}")]
+[Authorize(Policy = AuthPolicies.TenantMember)]
+[ServiceFilter(typeof(StageRosterAccessFilter))]
+public sealed class StageRostersController(RosterService rosterService) : ControllerBase
+{
+    [HttpGet("teams")]
+    public async Task<ActionResult<IReadOnlyList<TournamentTeamDto>>> GetTeams(
+        Guid stageId,
+        CancellationToken cancellationToken)
+    {
+        var divisionId = await rosterService.GetDivisionIdByStageAsync(stageId, cancellationToken);
+        return Ok(await rosterService.ListTeamsAsync(divisionId, cancellationToken));
+    }
+
+    [HttpGet("teams/{id:guid}")]
+    public async Task<ActionResult<TournamentTeamDetailsDto>> GetTeam(
         Guid stageId,
         Guid id,
         CancellationToken cancellationToken)
     {
-        await rosterService.WithdrawTeamAsync(stageId, id, cancellationToken);
-        return NoContent();
+        var divisionId = await rosterService.GetDivisionIdByStageAsync(stageId, cancellationToken);
+        return Ok(await rosterService.GetTeamAsync(divisionId, id, cancellationToken));
     }
 }

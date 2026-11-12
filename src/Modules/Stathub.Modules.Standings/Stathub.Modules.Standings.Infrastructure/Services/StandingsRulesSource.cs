@@ -29,7 +29,11 @@ public sealed class StandingsRulesSource(IStagePublicReader stagePublicReader) :
             stage.WinPoints,
             stage.DrawPoints,
             stage.LossPoints,
-            tiebreakers);
+            tiebreakers,
+            stage.QualifiersCount,
+            stage.Groups
+                .Select(group => new StandingsGroup(group.GroupId, group.Name, group.Order, group.TeamIds))
+                .ToList());
     }
 
     private static StandingsTiebreaker Map(TiebreakerKind kind) => kind switch

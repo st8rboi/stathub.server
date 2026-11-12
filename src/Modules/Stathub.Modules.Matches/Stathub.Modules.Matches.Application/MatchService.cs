@@ -120,6 +120,10 @@ public sealed class MatchService(
         return matches.Select(MatchDto.From).ToList();
     }
 
+    /// <summary>Этап и время начала всех матчей: витрина строит из них полосу дней с матчами.</summary>
+    public Task<IReadOnlyList<MatchSlotDto>> ListSlotsAsync(CancellationToken cancellationToken = default) =>
+        repository.GetSlotsAsync(cancellationToken);
+
     /// <summary>Перенос и замена команд у не начатого матча без событий.</summary>
     public async Task<MatchDto> UpdateAsync(
         Guid id,

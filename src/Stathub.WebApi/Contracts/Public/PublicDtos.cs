@@ -46,6 +46,9 @@ public sealed record PublicStageDto(
     int DrawPoints,
     int LossPoints);
 
+/// <summary>День с матчами в часовом поясе зрителя — вкладка полосы дат на главной.</summary>
+public sealed record PublicMatchDayDto(DateOnly Date, int Count);
+
 public sealed record PublicMatchDto(
     Guid Id,
     Guid StageId,

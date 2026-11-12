@@ -359,6 +359,57 @@ public sealed class PublicReadService(
             .ToList();
     }
 
+    /// <summary>
+    /// Дни, в которые есть матчи опубликованных лиг, с числом матчей. Граница дня — по
+    /// часовому поясу зрителя (IANA, например «Europe/Moscow»), иначе вечерний матч
+    /// попадёт не в тот день. Фильтр публикации тот же, что у <see cref="ListMatchesAsync"/>,
+    /// чтобы счётчик на вкладке совпадал со списком матчей дня.
+    /// </summary>
+    public async Task<IReadOnlyList<PublicMatchDayDto>> ListMatchDaysAsync(
+        string? timeZone,
+        CancellationToken cancellationToken)
+    {
+        var zone = ResolveTimeZone(timeZone);
+        var slots = await matchService.ListSlotsAsync(cancellationToken);
+        if (slots.Count == 0) return [];
+
+        var published = new Dictionary<Guid, bool>();
+        var visibleStages = new HashSet<Guid>();
+
+        foreach (var stageId in slots.Select(slot => slot.StageId).Distinct())
+        {
+            var stage = await stagePublicReader.GetAsync(stageId, cancellationToken);
+            if (stage is null) continue;
+            if (!await IsPublishedAsync(stage.TournamentId, published, cancellationToken)) continue;
+
+            visibleStages.Add(stageId);
+        }
+
+        return slots
+            .Where(slot => visibleStages.Contains(slot.StageId))
+            .GroupBy(slot => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(slot.ScheduledTimeUtc, DateTimeKind.Utc),
+                zone)))
+            .OrderBy(group => group.Key)
+            .Select(group => new PublicMatchDayDto(group.Key, group.Count()))
+            .ToList();
+    }
+
+    private static TimeZoneInfo ResolveTimeZone(string? timeZone)
+    {
+        if (string.IsNullOrWhiteSpace(timeZone))
+            return TimeZoneInfo.Utc;
+
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+        }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            throw new DomainException($"Неизвестный часовой пояс '{timeZone}'.");
+        }
+    }
+
     /// <summary>Опубликована ли лига турнира; результат кэшируется на время одного запроса.</summary>
     private async Task<bool> IsPublishedAsync(
         Guid tournamentId,

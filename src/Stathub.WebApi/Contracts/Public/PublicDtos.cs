@@ -143,13 +143,45 @@ public sealed record PublicTournamentHeaderDto(
 public sealed record PublicDivisionRefDto(Guid Id, string Name, int Order);
 
 /// <summary>
+/// Строка статистики игрока на витрине: строка модуля Statistics плюс фото игрока из модуля Players.
+/// </summary>
+public sealed record PublicPlayerStatisticsRowDto(
+    Guid PlayerId,
+    string PlayerName,
+    string? PhotoUrl,
+    Guid? TeamId,
+    string? TeamName,
+    string? TeamLogoUrl,
+    int Matches,
+    int Goals,
+    int Assists,
+    int OwnGoals,
+    int YellowCards,
+    int RedCards)
+{
+    public static PublicPlayerStatisticsRowDto From(PlayerStatisticsRowDto row, string? photoUrl) => new(
+        row.PlayerId,
+        row.PlayerName,
+        photoUrl,
+        row.TeamId,
+        row.TeamName,
+        row.TeamLogoUrl,
+        row.Matches,
+        row.Goals,
+        row.Assists,
+        row.OwnGoals,
+        row.YellowCards,
+        row.RedCards);
+}
+
+/// <summary>
 /// Статистика игроков одного дивизиона турнира (<see cref="DivisionId"/>): дивизионы — независимые
 /// соревнования, общий список бомбардиров на турнир не строится. <see cref="Divisions"/> — все
 /// дивизионы турнира для переключателя.
 /// </summary>
 public sealed record PublicTournamentStatisticsDto(
     PublicTournamentHeaderDto Tournament,
-    IReadOnlyList<PlayerStatisticsRowDto> Rows,
+    IReadOnlyList<PublicPlayerStatisticsRowDto> Rows,
     Guid? DivisionId,
     IReadOnlyList<PublicDivisionRefDto> Divisions);
 

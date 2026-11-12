@@ -490,6 +490,14 @@ public sealed class PublicReadService(
             ? []
             : await playerStatisticsService.GetDivisionStatisticsAsync(selected.DivisionId, cancellationToken);
 
+        // Фото — из модуля Players: Statistics о них не знает.
+        var photos = rows.Count == 0
+            ? new Dictionary<Guid, string?>()
+            : (await playerService.GetByIdsAsync(
+                    rows.Select(row => row.PlayerId).Distinct().ToList(),
+                    cancellationToken))
+                .ToDictionary(player => player.Id, player => player.PhotoUrl);
+
         return new PublicTournamentStatisticsDto(
             new PublicTournamentHeaderDto(
                 info.Id,
@@ -497,7 +505,9 @@ public sealed class PublicReadService(
                 info.LeagueName,
                 info.LeagueSlug,
                 info.LeagueLogoUrl),
-            rows,
+            rows
+                .Select(row => PublicPlayerStatisticsRowDto.From(row, photos.GetValueOrDefault(row.PlayerId)))
+                .ToList(),
             selected?.DivisionId,
             divisions
                 .Select(division => new PublicDivisionRefDto(division.DivisionId, division.Name, division.Order))

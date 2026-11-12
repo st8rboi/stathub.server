@@ -75,4 +75,20 @@ public sealed class PublicController(PublicReadService publicReadService) : Cont
         [FromQuery] Guid? divisionId,
         CancellationToken cancellationToken) =>
         Ok(await publicReadService.GetTournamentStatisticsAsync(id, divisionId, cancellationToken));
+
+    /// <summary>
+    /// Полная статистика игроков дивизиона файлом .xlsx (только текст, без фото и логотипов):
+    /// на витрине показывается топ-10, остальное — здесь.
+    /// </summary>
+    [HttpGet("tournaments/{id:guid}/statistics.xlsx")]
+    public async Task<IActionResult> DownloadTournamentStatistics(
+        Guid id,
+        [FromQuery] Guid? divisionId,
+        CancellationToken cancellationToken)
+    {
+        var statistics = await publicReadService.GetTournamentStatisticsAsync(id, divisionId, cancellationToken);
+        var (fileName, content) = StatisticsWorkbook.Build(statistics, DateTime.UtcNow);
+
+        return File(content, StatisticsWorkbook.ContentType, fileName);
+    }
 }

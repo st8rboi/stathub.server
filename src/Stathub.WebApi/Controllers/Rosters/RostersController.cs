@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Stathub.Modules.Identity.Application.Interfaces;
 using Stathub.Modules.Rosters.Application;
 using Stathub.Modules.Rosters.Application.Dtos;
 using Stathub.WebApi.Contracts.Rosters;
@@ -17,22 +18,37 @@ namespace Stathub.WebApi.Controllers.Rosters;
 // Запись — только организатору (см. атрибуты на POST/PUT/DELETE ниже).
 [Authorize(Policy = AuthPolicies.TenantMember)]
 [ServiceFilter(typeof(DivisionRosterAccessFilter))]
-public sealed class RostersController(RosterService rosterService) : ControllerBase
+public sealed class RostersController(RosterService rosterService, ICurrentUser currentUser) : ControllerBase
 {
+    /// <summary>
+    /// Заявка команды. С <c>copyFromTournamentTeamId</c> — сразу с составом из другой заявки команды;
+    /// в ответе — сколько игроков скопировано и кто пропущен (уже заявлен за другую команду турнира).
+    /// </summary>
     [HttpPost("teams")]
     [Authorize(Policy = AuthPolicies.Organizer)]
-    public async Task<IActionResult> AddTeam(
+    public async Task<ActionResult<AddTournamentTeamResult>> AddTeam(
         Guid divisionId,
         AddTournamentTeamRequest request,
         CancellationToken cancellationToken)
     {
-        var tournamentTeamId = await rosterService.AddTeamAsync(divisionId, request.TeamId, cancellationToken);
+        var result = await rosterService.AddTeamAsync(
+            divisionId,
+            request.TeamId,
+            request.CopyFromTournamentTeamId,
+            currentUser.TenantId,
+            cancellationToken);
 
-        return CreatedAtAction(
-            nameof(GetTeam),
-            new { divisionId, id = tournamentTeamId },
-            new { Id = tournamentTeamId });
+        return CreatedAtAction(nameof(GetTeam), new { divisionId, id = result.Id }, result);
     }
+
+    /// <summary>Заявки команды в других турнирах, из которых можно скопировать состав.</summary>
+    [HttpGet("roster-sources")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<ActionResult<IReadOnlyList<RosterSourceDto>>> GetRosterSources(
+        Guid divisionId,
+        [FromQuery] Guid teamId,
+        CancellationToken cancellationToken) =>
+        Ok(await rosterService.ListRosterSourcesAsync(divisionId, teamId, currentUser.TenantId, cancellationToken));
 
     [HttpGet("teams")]
     public async Task<ActionResult<IReadOnlyList<TournamentTeamDto>>> GetTeams(

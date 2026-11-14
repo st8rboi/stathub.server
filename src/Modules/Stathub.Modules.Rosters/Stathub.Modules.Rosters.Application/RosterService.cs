@@ -25,9 +25,17 @@ public sealed class RosterService(
     IPlayerExistsProvider playerExists,
     IEnumerable<IRosterUsageSource> usageSources)
 {
-    public async Task<Guid> AddTeamAsync(
+    /// <summary>
+    /// Заявка команды в дивизион. С <paramref name="copyFromTournamentTeamId"/> — сразу с составом
+    /// из другой заявки этой же команды (см. <see cref="ListRosterSourcesAsync"/>): копируются
+    /// активные игроки источника, кроме уже заявленных за другую команду этого турнира.
+    /// </summary>
+    /// <param name="organizerId">Организатор из токена: копировать можно только видимую ему заявку</param>
+    public async Task<AddTournamentTeamResult> AddTeamAsync(
         Guid divisionId,
         Guid teamId,
+        Guid? copyFromTournamentTeamId,
+        Guid organizerId,
         CancellationToken cancellationToken = default)
     {
         var division = await GetDivisionOrThrowAsync(divisionId, cancellationToken);
@@ -41,13 +49,102 @@ public sealed class RosterService(
                 ? "Команда уже заявлена в этот дивизион."
                 : "Команда уже заявлена в другой дивизион этого турнира.");
 
+        var playersToCopy = copyFromTournamentTeamId is { } sourceId
+            ? await GetSourcePlayersAsync(sourceId, teamId, organizerId, cancellationToken)
+            : [];
+
         var tournamentTeam = TournamentTeam.Create(divisionId, division.TournamentId, teamId);
+
+        var busy = playersToCopy.Count == 0
+            ? []
+            : await repository.FindPlayersWithActiveRegistrationAsync(division.TournamentId, playersToCopy, cancellationToken);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var skipped = new List<Guid>();
+        foreach (var playerId in playersToCopy)
+        {
+            if (busy.Contains(playerId))
+                skipped.Add(playerId);
+            else
+                tournamentTeam.RegisterPlayer(playerId, today);
+        }
 
         await repository.AddAsync(tournamentTeam, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
 
-        return tournamentTeam.Id;
+        return new AddTournamentTeamResult(tournamentTeam.Id, playersToCopy.Count - skipped.Count, skipped);
     }
+
+    /// <summary>
+    /// Заявки команды в других турнирах, из которых можно скопировать состав, новые первыми.
+    /// Видны заявки своих лиг и опубликованных: чужие черновые лиги не раскрываются.
+    /// Заявки без активных игроков не предлагаются — копировать из них нечего.
+    /// </summary>
+    public async Task<IReadOnlyList<RosterSourceDto>> ListRosterSourcesAsync(
+        Guid divisionId,
+        Guid teamId,
+        Guid organizerId,
+        CancellationToken cancellationToken = default)
+    {
+        var division = await GetDivisionOrThrowAsync(divisionId, cancellationToken);
+
+        var entries = (await repository.ListByTeamAsync(teamId, cancellationToken))
+            .Where(entry => entry.TournamentId != division.TournamentId)
+            .Where(entry => entry.ActivePlayerIds.Count > 0)
+            .ToList();
+
+        if (entries.Count == 0)
+            return [];
+
+        var infos = (await divisionInfo.GetSourceInfosAsync(
+                entries.Select(entry => entry.DivisionId).Distinct().ToList(),
+                cancellationToken))
+            .ToDictionary(info => info.DivisionId);
+
+        return entries
+            .Where(entry => infos.TryGetValue(entry.DivisionId, out var info) && IsVisible(info, organizerId))
+            .Select(entry =>
+            {
+                var info = infos[entry.DivisionId];
+                return new RosterSourceDto(
+                    entry.Id,
+                    entry.TournamentId,
+                    info.TournamentName,
+                    entry.DivisionId,
+                    info.DivisionName,
+                    info.LeagueName,
+                    entry.Status,
+                    entry.ActivePlayerIds.Count,
+                    entry.CreatedAtUtc);
+            })
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<Guid>> GetSourcePlayersAsync(
+        Guid sourceId,
+        Guid teamId,
+        Guid organizerId,
+        CancellationToken cancellationToken)
+    {
+        // Чужую или невидимую заявку отдаём как 404 — не подтверждаем даже факт её существования.
+        var notFound = new NotFoundException($"Заявка-источник '{sourceId}' не найдена.");
+
+        var source = await repository.GetByIdAsync(sourceId, cancellationToken) ?? throw notFound;
+
+        if (source.TeamId != teamId)
+            throw new DomainException("Скопировать можно только заявку этой же команды.");
+
+        var info = (await divisionInfo.GetSourceInfosAsync([source.DivisionId], cancellationToken))
+            .FirstOrDefault();
+
+        if (info is null || !IsVisible(info, organizerId))
+            throw notFound;
+
+        return source.ActivePlayerIds;
+    }
+
+    private static bool IsVisible(DivisionSourceInfo info, Guid organizerId) =>
+        info.OrganizerId == organizerId || info.IsPublished;
 
     public async Task<IReadOnlyList<TournamentTeamDto>> ListTeamsAsync(
         Guid divisionId,

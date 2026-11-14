@@ -30,6 +30,18 @@ public sealed class TournamentTeam : AggregateRoot
 
     public IReadOnlyCollection<PlayerRegistration> Registrations => _registrations.AsReadOnly();
 
+    /// <summary>
+    /// Игроки, заявленные за команду сейчас (для завершённого турнира — на момент его окончания).
+    /// Именно этот состав переносится при копировании заявки в новый турнир.
+    /// </summary>
+    public IReadOnlyList<Guid> ActivePlayerIds =>
+        _registrations
+            .Where(registration => registration.Status == PlayerRegistrationStatus.Active)
+            .OrderBy(registration => registration.JoinedOn)
+            .Select(registration => registration.PlayerId)
+            .Distinct()
+            .ToList();
+
     private TournamentTeam()
     {
     }

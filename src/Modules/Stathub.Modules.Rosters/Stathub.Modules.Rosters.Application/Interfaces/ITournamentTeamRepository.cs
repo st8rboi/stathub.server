@@ -38,6 +38,12 @@ public interface ITournamentTeamRepository
         Guid playerId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Кто из перечисленных игроков уже заявлен (активно) за какую-либо команду турнира.</summary>
+    Task<IReadOnlyCollection<Guid>> FindPlayersWithActiveRegistrationAsync(
+        Guid tournamentId,
+        IReadOnlyCollection<Guid> playerIds,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(TournamentTeam tournamentTeam, CancellationToken cancellationToken = default);
 
     /// <summary>Удаление заявки команды вместе с заявками игроков (каскад внутри модуля).</summary>

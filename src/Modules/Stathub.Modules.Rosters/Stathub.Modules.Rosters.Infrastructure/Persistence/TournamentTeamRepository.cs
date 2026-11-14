@@ -71,6 +71,26 @@ internal sealed class TournamentTeamRepository(RostersDbContext dbContext) : ITo
         return result;
     }
 
+    public async Task<IReadOnlyCollection<Guid>> FindPlayersWithActiveRegistrationAsync(
+        Guid tournamentId,
+        IReadOnlyCollection<Guid> playerIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = playerIds.ToList();
+
+        var result = await dbContext.TournamentTeams
+            .AsNoTracking()
+            .Where(tournamentTeam => tournamentTeam.TournamentId == tournamentId)
+            .SelectMany(tournamentTeam => tournamentTeam.Registrations)
+            .Where(registration =>
+                registration.Status == PlayerRegistrationStatus.Active && ids.Contains(registration.PlayerId))
+            .Select(registration => registration.PlayerId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return result.ToHashSet();
+    }
+
     public async Task AddAsync(TournamentTeam tournamentTeam, CancellationToken cancellationToken = default) =>
         await dbContext.TournamentTeams.AddAsync(tournamentTeam, cancellationToken);
 

@@ -16,7 +16,7 @@ namespace Stathub.WebApi.Controllers.Matches;
 
 /// <summary>
 /// Матчи и протокол. Доступ: организатор/админ — матчи своей организации,
-/// судья — только назначенные ему. Проверка на каждый запрос (см. MatchAccessGuard).
+/// судья и статистик — только назначенные им. Проверка на каждый запрос (см. MatchAccessGuard).
 /// </summary>
 [ApiController]
 [Route("matches")]
@@ -72,7 +72,7 @@ public sealed class MatchesController(
     }
 
     /// <summary>
-    /// Матчи этапа: организатор видит весь этап своей лиги, судья — только назначенные матчи.
+    /// Матчи этапа: организатор видит весь этап своей лиги, судья и статистик — только назначенные матчи.
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<MatchDto>>> GetMatches(
@@ -81,7 +81,7 @@ public sealed class MatchesController(
     {
         var matches = await matchService.ListByStageAsync(stageId, cancellationToken);
 
-        if (currentUser.Role is UserRole.Referee)
+        if (currentUser.Role is UserRole.Referee or UserRole.Statistician)
         {
             var assigned = await accountService.GetAssignedMatchIdsAsync(
                 currentUser.UserId,
@@ -171,19 +171,25 @@ public sealed class MatchesController(
 
     // Батч событий протокола, включая смену статуса матча. Идемпотентно по клиентскому UUID:
     // повторы из офлайн-очереди не создают дублей и возвращаются в duplicateEventIds.
+    // Статистик тем же эндпоинтом отправляет удары, фолы и угловые — остальное ему отклоняется.
     [HttpPost("{id:guid}/events")]
     public async Task<ActionResult<AppendEventsResultDto>> AppendEvents(
         Guid id,
         AppendMatchEventsRequest request,
         CancellationToken cancellationToken)
     {
-        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
+        var access = await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
 
         var events = (request.Events ?? [])
             .Select(ToNewEvent)
             .ToList();
 
-        var result = await matchEventService.AppendEventsAsync(id, events, request.SentAtUtc, cancellationToken);
+        var result = await matchEventService.AppendEventsAsync(
+            id,
+            events,
+            request.SentAtUtc,
+            statisticsOnly: access == MatchAccess.StatisticsOnly,
+            cancellationToken);
 
         // Пуш зрителям — только после коммита; сам пуш best-effort (doc §4, §9).
         await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);

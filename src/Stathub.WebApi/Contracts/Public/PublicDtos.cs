@@ -1,3 +1,4 @@
+using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Standings.Application.Dtos;
 using Stathub.Modules.Statistics.Application.Dtos;
 
@@ -117,9 +118,14 @@ public sealed record PublicEventDto(
     int? ElapsedSeconds,
     string? PlayerPhotoUrl);
 
+/// <summary>
+/// Страница матча. <see cref="Statistics"/> — командная статистика от статистика;
+/// null, если по матчу её не вели (вкладку «Статистика» тогда не показываем).
+/// </summary>
 public sealed record PublicMatchPageDto(
     PublicMatchDto Match,
-    IReadOnlyList<PublicEventDto> Events);
+    IReadOnlyList<PublicEventDto> Events,
+    MatchStatisticsDto? Statistics);
 
 /// <summary>
 /// Страница этапа. <see cref="StandingsGroups"/> заполнен у группового этапа (тогда

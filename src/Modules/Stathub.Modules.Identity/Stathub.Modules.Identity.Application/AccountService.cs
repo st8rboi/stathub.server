@@ -48,7 +48,7 @@ public sealed class AccountService(
         return (tenant, user);
     }
 
-    /// <summary>Организатор создаёт аккаунт сотрудника (судья/тренер/админ) в своей организации.</summary>
+    /// <summary>Организатор создаёт аккаунт сотрудника (судья/статистик/тренер/админ) в своей организации.</summary>
     public async Task<UserSummaryDto> CreateUserAsync(
         Guid tenantId,
         Guid grantedByUserId,
@@ -112,7 +112,7 @@ public sealed class AccountService(
             .ToList();
     }
 
-    /// <summary>Назначение на конкретный объект: матч (судья), команду (тренер), лигу/турнир (админ).</summary>
+    /// <summary>Назначение на конкретный объект: матч (судья, статистик), команду (тренер), лигу/турнир (админ).</summary>
     public async Task<AssignmentSummaryDto> AssignScopeAsync(
         Guid tenantId,
         Guid userId,
@@ -170,7 +170,7 @@ public sealed class AccountService(
             assignment.GrantedAtUtc);
     }
 
-    /// <summary>Матчи, на которые назначен пользователь (для «Мои матчи» судьи).</summary>
+    /// <summary>Матчи, на которые назначен пользователь (для «Мои матчи» судьи и статистика).</summary>
     public async Task<IReadOnlyList<Guid>> GetAssignedMatchIdsAsync(
         Guid userId,
         Guid tenantId,
@@ -183,6 +183,26 @@ public sealed class AccountService(
                                  && assignment.ScopeType == RoleScopeType.Match
                                  && assignment.ScopeId is not null)
             .Select(assignment => assignment.ScopeId!.Value)
+            .Distinct()
+            .ToList();
+    }
+
+    /// <summary>
+    /// Роли пользователя на конкретном матче (судья, статистик). Пусто — матч ему не назначен.
+    /// </summary>
+    public async Task<IReadOnlyList<UserRole>> GetMatchRolesAsync(
+        Guid userId,
+        Guid tenantId,
+        Guid matchId,
+        CancellationToken cancellationToken = default)
+    {
+        var userAssignments = await assignments.GetActiveByUserAsync(userId, cancellationToken);
+
+        return userAssignments
+            .Where(assignment => assignment.TenantId == tenantId
+                                 && assignment.ScopeType == RoleScopeType.Match
+                                 && assignment.ScopeId == matchId)
+            .Select(assignment => assignment.Role)
             .Distinct()
             .ToList();
     }

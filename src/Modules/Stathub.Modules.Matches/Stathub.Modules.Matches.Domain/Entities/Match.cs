@@ -329,9 +329,22 @@ public sealed class Match : AggregateRoot
     /// <summary>Может ли новое событие войти в протокол: матч открыт, команда играет в этом матче.</summary>
     public void EnsureCanAccept(MatchEvent matchEvent)
     {
-        EnsureEventsCanBeChanged();
+        if (!IsLateStatistic(matchEvent))
+            EnsureEventsCanBeChanged();
+
         EnsureEventBelongsToMatch(matchEvent);
     }
+
+    /// <summary>
+    /// Статистик и судья отправляют события независимо: удар за минуту до свистка может дойти
+    /// до сервера уже после финального свистка судьи. Такой удар — часть матча, его принимаем;
+    /// всё, что отмечено после свистка, — нет.
+    /// </summary>
+    private bool IsLateStatistic(MatchEvent matchEvent) =>
+        matchEvent.IsStatistic
+        && Status == MatchStatus.Finished
+        && FinishedAtUtc is { } finishedAtUtc
+        && matchEvent.EffectiveTimeUtc <= finishedAtUtc;
 
     private void EnsureEventBelongsToMatch(MatchEvent matchEvent)
     {

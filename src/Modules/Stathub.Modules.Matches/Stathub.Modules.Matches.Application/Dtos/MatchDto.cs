@@ -5,6 +5,8 @@ namespace Stathub.Modules.Matches.Application.Dtos;
 
 public sealed record MatchDto(
     Guid Id,
+    // Короткий сквозной номер — для ссылки на оверлей трансляции
+    int Number,
     Guid StageId,
     Guid TournamentId,
     Guid DivisionId,
@@ -36,6 +38,7 @@ public sealed record MatchDto(
 {
     internal static MatchDto From(Match match) => new(
         match.Id,
+        match.Number,
         match.StageId,
         match.TournamentId,
         match.DivisionId,

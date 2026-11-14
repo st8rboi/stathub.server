@@ -50,6 +50,13 @@ public sealed class PublicController(PublicReadService publicReadService) : Cont
         CancellationToken cancellationToken) =>
         Ok(await publicReadService.GetMatchPageAsync(id, cancellationToken));
 
+    /// <summary>Матч по короткому сквозному номеру — ссылка на оверлей трансляции.</summary>
+    [HttpGet("matches/by-number/{number:int}")]
+    public async Task<ActionResult<PublicMatchPageDto>> GetMatchByNumber(
+        int number,
+        CancellationToken cancellationToken) =>
+        Ok(await publicReadService.GetMatchPageByNumberAsync(number, cancellationToken));
+
     [HttpGet("live")]
     public async Task<ActionResult<IReadOnlyList<PublicMatchDto>>> GetLive(CancellationToken cancellationToken) =>
         Ok(await publicReadService.ListLiveAsync(cancellationToken));

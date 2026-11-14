@@ -71,6 +71,8 @@ public sealed record PublicMatchDayDto(DateOnly Date, int Count);
 
 public sealed record PublicMatchDto(
     Guid Id,
+    // Короткий сквозной номер: ссылка на оверлей трансляции — /overlay.html?match=<Number>.
+    int Number,
     Guid StageId,
     string StageName,
     string TournamentName,

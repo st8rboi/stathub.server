@@ -3,10 +3,13 @@ using Stathub.Modules.Matches.Domain.Enums;
 
 namespace Stathub.Modules.Matches.Domain.Services;
 
-/// <summary>Командная статистика матча. <see cref="Shots"/> — все удары, включая удары в створ.</summary>
-public sealed record TeamMatchStatistics(int Shots, int ShotsOnTarget, int Fouls, int Corners)
+/// <summary>
+/// Командная статистика матча. <see cref="Shots"/> — все удары, включая удары в створ;
+/// <see cref="ExpectedGoals"/> — сумма xG всех ударов команды.
+/// </summary>
+public sealed record TeamMatchStatistics(int Shots, int ShotsOnTarget, int Fouls, int Corners, decimal ExpectedGoals)
 {
-    public static readonly TeamMatchStatistics Empty = new(0, 0, 0, 0);
+    public static readonly TeamMatchStatistics Empty = new(0, 0, 0, 0, 0m);
 }
 
 public sealed record MatchStatistics(TeamMatchStatistics Home, TeamMatchStatistics Away)
@@ -39,7 +42,7 @@ public sealed record MatchStatistics(TeamMatchStatistics Home, TeamMatchStatisti
                 : matchEvent.TeamId == awayTeamId ? away
                 : null;
 
-            counter?.Add(matchEvent.Type);
+            counter?.Add(matchEvent.Type, matchEvent.ExpectedGoals);
         }
 
         return new MatchStatistics(home.ToStatistics(), away.ToStatistics());
@@ -51,9 +54,13 @@ public sealed record MatchStatistics(TeamMatchStatistics Home, TeamMatchStatisti
         private int shotsOnTarget;
         private int fouls;
         private int corners;
+        private decimal expectedGoals;
 
-        public void Add(MatchEventType type)
+        public void Add(MatchEventType type, decimal? xg)
         {
+            // У старых ударов (до появления xG) значения нет — они просто не добавляют к сумме.
+            expectedGoals += xg ?? 0m;
+
             switch (type)
             {
                 case MatchEventType.Shot:
@@ -72,6 +79,6 @@ public sealed record MatchStatistics(TeamMatchStatistics Home, TeamMatchStatisti
             }
         }
 
-        public TeamMatchStatistics ToStatistics() => new(shots, shotsOnTarget, fouls, corners);
+        public TeamMatchStatistics ToStatistics() => new(shots, shotsOnTarget, fouls, corners, expectedGoals);
     }
 }

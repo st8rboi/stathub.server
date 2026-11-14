@@ -19,7 +19,7 @@ public sealed class StatisticianTests(StathubApiFactory factory)
         var now = DateTime.UtcNow;
 
         var result = await SendAsync(scenario.Statistician, scenario.MatchId, [
-            Event("ShotOnTarget", 1, now, scenario.HomeTeamId),
+            Event("ShotOnTarget", 1, now, scenario.HomeTeamId, 0.45m),
             Event("Corner", 2, now, scenario.AwayTeamId),
             Event("MatchStarted", 3, now),
             Event("Goal", 4, now, scenario.HomeTeamId)
@@ -34,6 +34,19 @@ public sealed class StatisticianTests(StathubApiFactory factory)
         Assert.Equal(0, state.GetProperty("match").GetProperty("homeScore").GetInt32());
         Assert.Equal(1, home.GetProperty("shots").GetInt32());
         Assert.Equal(1, home.GetProperty("shotsOnTarget").GetInt32());
+        Assert.Equal(0.45m, home.GetProperty("expectedGoals").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Shot_WithoutExpectedGoals_IsRejected()
+    {
+        var scenario = await CreateScenarioAsync();
+
+        var result = await SendAsync(scenario.Statistician, scenario.MatchId, [
+            Event("Shot", 1, DateTime.UtcNow, scenario.HomeTeamId)
+        ]);
+
+        Assert.Single(result.GetProperty("rejectedEvents").EnumerateArray());
     }
 
     [Fact]
@@ -89,7 +102,7 @@ public sealed class StatisticianTests(StathubApiFactory factory)
             .EnsureSuccessStatusCode();
 
         await SendAsync(scenario.Statistician, scenario.MatchId, [
-            Event("Shot", 1, now, scenario.HomeTeamId),
+            Event("Shot", 1, now, scenario.HomeTeamId, 0.15m),
             Event("Corner", 2, now, scenario.HomeTeamId)
         ]);
 
@@ -103,11 +116,16 @@ public sealed class StatisticianTests(StathubApiFactory factory)
         Assert.Equal(1, root.GetProperty("statistics").GetProperty("home").GetProperty("corners").GetInt32());
     }
 
-    private static EventBody Event(string type, long sequenceNumber, DateTime clientTimestampUtc, Guid? teamId = null) =>
-        new(Guid.NewGuid(), type, teamId, null, clientTimestampUtc, sequenceNumber);
+    private static EventBody Event(
+        string type,
+        long sequenceNumber,
+        DateTime clientTimestampUtc,
+        Guid? teamId = null,
+        decimal? expectedGoals = null) =>
+        new(Guid.NewGuid(), type, teamId, null, clientTimestampUtc, sequenceNumber, expectedGoals);
 
     private static EventBody Void(long sequenceNumber, DateTime clientTimestampUtc, Guid targetEventId) =>
-        new(Guid.NewGuid(), "EventVoided", null, targetEventId, clientTimestampUtc, sequenceNumber);
+        new(Guid.NewGuid(), "EventVoided", null, targetEventId, clientTimestampUtc, sequenceNumber, null);
 
     private static async Task<JsonElement> SendAsync(HttpClient client, Guid matchId, object[] events)
     {
@@ -142,7 +160,8 @@ public sealed class StatisticianTests(StathubApiFactory factory)
         Guid? teamId,
         Guid? targetEventId,
         DateTime clientTimestampUtc,
-        long sequenceNumber);
+        long sequenceNumber,
+        decimal? expectedGoals);
 
     private sealed record Scenario(
         TestOrganizer Organizer,

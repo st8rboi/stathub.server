@@ -22,16 +22,16 @@ public sealed class MatchStatisticsTests
         var match = CreateMatch();
 
         var statistics = MatchStatistics.Compute(HomeTeamId, AwayTeamId, [
-            Stat(match, MatchEventType.Shot, HomeTeamId, 1),
-            Stat(match, MatchEventType.ShotOnTarget, HomeTeamId, 2),
+            Stat(match, MatchEventType.Shot, HomeTeamId, 1, xg: 0.15m),
+            Stat(match, MatchEventType.ShotOnTarget, HomeTeamId, 2, xg: 0.45m),
             Stat(match, MatchEventType.Foul, HomeTeamId, 3),
             Stat(match, MatchEventType.Corner, AwayTeamId, 4),
             Stat(match, MatchEventType.Corner, AwayTeamId, 5),
             Stat(match, MatchEventType.Foul, AwayTeamId, 6)
         ]);
 
-        Assert.Equal(new TeamMatchStatistics(Shots: 2, ShotsOnTarget: 1, Fouls: 1, Corners: 0), statistics.Home);
-        Assert.Equal(new TeamMatchStatistics(Shots: 0, ShotsOnTarget: 0, Fouls: 1, Corners: 2), statistics.Away);
+        Assert.Equal(new TeamMatchStatistics(Shots: 2, ShotsOnTarget: 1, Fouls: 1, Corners: 0, ExpectedGoals: 0.60m), statistics.Home);
+        Assert.Equal(new TeamMatchStatistics(Shots: 0, ShotsOnTarget: 0, Fouls: 1, Corners: 2, ExpectedGoals: 0m), statistics.Away);
         Assert.False(statistics.IsEmpty);
     }
 
@@ -59,6 +59,34 @@ public sealed class MatchStatisticsTests
 
         Assert.Equal(0, match.HomeScore);
         Assert.Equal(0, match.AwayScore);
+    }
+
+    [Fact]
+    public void VoidedShot_DoesNotAddExpectedGoals()
+    {
+        var match = CreateMatch();
+        var shot = Stat(match, MatchEventType.Shot, AwayTeamId, 1, xg: 0.65m);
+
+        var statistics = MatchStatistics.Compute(HomeTeamId, AwayTeamId, [
+            shot,
+            Void(match, shot, 2),
+            Stat(match, MatchEventType.ShotOnTarget, AwayTeamId, 3, xg: 0.05m)
+        ]);
+
+        Assert.Equal(1, statistics.Away.Shots);
+        Assert.Equal(0.05m, statistics.Away.ExpectedGoals);
+    }
+
+    [Theory]
+    [InlineData(MatchEventType.Shot, null)]
+    [InlineData(MatchEventType.ShotOnTarget, 0)]
+    [InlineData(MatchEventType.Shot, 1.5)]
+    [InlineData(MatchEventType.Foul, 0.25)]
+    public void ExpectedGoals_RequiredForShots_AndOnlyForShots(MatchEventType type, double? xg)
+    {
+        var match = CreateMatch();
+
+        Assert.Throws<DomainException>(() => Stat(match, type, HomeTeamId, 1, xg: (decimal?)xg, defaultXg: false));
     }
 
     [Fact]
@@ -107,12 +135,15 @@ public sealed class MatchStatisticsTests
         DateTime.UtcNow,
         MatchFormat.Create(periodsCount: 2, periodDurationMinutes: 45, extraTimeEnabled: false, penaltyShootoutEnabled: false));
 
+    /// <param name="defaultXg">Удару без явного xG подставляется 0.25 — чтобы тесты подсчёта не зависели от xG.</param>
     private static MatchEvent Stat(
         Match match,
         MatchEventType type,
         Guid teamId,
         long sequenceNumber,
-        DateTime? occurredAtUtc = null) => MatchEvent.Create(
+        DateTime? occurredAtUtc = null,
+        decimal? xg = null,
+        bool defaultXg = true) => MatchEvent.Create(
         Guid.NewGuid(),
         match.Id,
         type,
@@ -122,7 +153,8 @@ public sealed class MatchStatisticsTests
         targetEventId: null,
         reason: null,
         occurredAtUtc ?? DateTime.UtcNow,
-        sequenceNumber);
+        sequenceNumber,
+        expectedGoals: xg ?? (defaultXg && MatchEvent.IsShotType(type) ? 0.25m : null));
 
     private static MatchEvent Void(Match match, MatchEvent target, long sequenceNumber) => MatchEvent.Create(
         Guid.NewGuid(),

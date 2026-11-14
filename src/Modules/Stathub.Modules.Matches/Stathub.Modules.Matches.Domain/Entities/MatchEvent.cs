@@ -60,6 +60,12 @@ public sealed class MatchEvent : Entity
     /// </summary>
     public string? ReviewNote { get; private set; }
 
+    /// <summary>
+    /// Ожидаемые голы (xG) удара — опасность момента по оценке статистика, от 0 до 1.
+    /// Заполняется только у ударов (<see cref="MatchEventType.Shot"/>, <see cref="MatchEventType.ShotOnTarget"/>).
+    /// </summary>
+    public decimal? ExpectedGoals { get; private set; }
+
     /// <summary>Порядковый номер события внутри матча, назначается клиентом.</summary>
     public long SequenceNumber { get; private set; }
 
@@ -81,7 +87,8 @@ public sealed class MatchEvent : Entity
         string? reason,
         DateTime clientTimestampUtc,
         DateTime occurredAtUtc,
-        long sequenceNumber)
+        long sequenceNumber,
+        decimal? expectedGoals)
     {
         Id = id;
         MatchId = matchId;
@@ -94,6 +101,7 @@ public sealed class MatchEvent : Entity
         ClientTimestampUtc = clientTimestampUtc;
         OccurredAtUtc = occurredAtUtc;
         SequenceNumber = sequenceNumber;
+        ExpectedGoals = expectedGoals;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
@@ -108,7 +116,8 @@ public sealed class MatchEvent : Entity
         string? reason,
         DateTime clientTimestampUtc,
         long sequenceNumber,
-        DateTime? occurredAtUtc = null)
+        DateTime? occurredAtUtc = null,
+        decimal? expectedGoals = null)
     {
         if (id == Guid.Empty)
             throw new DomainException("Событие должно иметь идентификатор, сгенерированный клиентом (UUID).");
@@ -120,6 +129,7 @@ public sealed class MatchEvent : Entity
             throw new DomainException("SequenceNumber должен быть больше 0.");
 
         ValidateTypeRules(type, id, teamId, playerId, relatedPlayerId, targetEventId);
+        var normalizedExpectedGoals = NormalizeExpectedGoals(type, expectedGoals);
 
         var normalizedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         if (normalizedReason is { Length: > ReasonMaxLength })
@@ -136,7 +146,31 @@ public sealed class MatchEvent : Entity
             normalizedReason,
             clientTimestampUtc,
             occurredAtUtc ?? clientTimestampUtc,
-            sequenceNumber);
+            sequenceNumber,
+            normalizedExpectedGoals);
+    }
+
+    public static bool IsShotType(MatchEventType type) => type is MatchEventType.Shot or MatchEventType.ShotOnTarget;
+
+    /// <summary>
+    /// xG обязателен у удара (статистик выбирает опасность момента) и запрещён у остальных событий:
+    /// у фола или гола «ожидаемых голов» нет. Храним с точностью до сотых.
+    /// </summary>
+    private static decimal? NormalizeExpectedGoals(MatchEventType type, decimal? expectedGoals)
+    {
+        if (!IsShotType(type))
+        {
+            if (expectedGoals is not null)
+                throw new DomainException("xG указывается только у удара.");
+            return null;
+        }
+
+        if (expectedGoals is not { } value)
+            throw new DomainException("У удара должна быть указана опасность (xG).");
+        if (value <= 0 || value > 1)
+            throw new DomainException("xG удара должен быть больше 0 и не больше 1.");
+
+        return Math.Round(value, 2, MidpointRounding.AwayFromZero);
     }
 
     public bool IsLifecycle => Type is MatchEventType.MatchStarted

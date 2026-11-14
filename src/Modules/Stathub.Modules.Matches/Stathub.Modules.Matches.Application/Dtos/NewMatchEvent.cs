@@ -15,4 +15,5 @@ public sealed record NewMatchEvent(
     Guid? TargetEventId,
     string? Reason,
     DateTime ClientTimestampUtc,
-    long SequenceNumber);
+    long SequenceNumber,
+    decimal? ExpectedGoals = null);

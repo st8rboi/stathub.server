@@ -27,6 +27,9 @@ internal sealed class MatchEventConfiguration : IEntityTypeConfiguration<MatchEv
 
         builder.Property(matchEvent => matchEvent.ReviewNote).HasMaxLength(256);
 
+        // xG удара: 0.01–1.00, сотых достаточно.
+        builder.Property(matchEvent => matchEvent.ExpectedGoals).HasPrecision(4, 2);
+
         builder.Property(matchEvent => matchEvent.ClientTimestampUtc).IsRequired();
         builder.Property(matchEvent => matchEvent.OccurredAtUtc);
         builder.Property(matchEvent => matchEvent.SequenceNumber).IsRequired();

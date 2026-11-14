@@ -156,6 +156,10 @@ public sealed class PublicReadService(
             divisionStages);
     }
 
+    /// <summary>Страница матча по короткому номеру — так оверлей трансляции находит матч.</summary>
+    public async Task<PublicMatchPageDto> GetMatchPageByNumberAsync(int number, CancellationToken cancellationToken) =>
+        await GetMatchPageAsync(await matchService.GetIdByNumberAsync(number, cancellationToken), cancellationToken);
+
     public async Task<PublicMatchPageDto> GetMatchPageAsync(Guid matchId, CancellationToken cancellationToken)
     {
         var state = await matchEventService.GetStateAsync(matchId, cancellationToken);
@@ -672,6 +676,7 @@ public sealed class PublicReadService(
 
         return new PublicMatchDto(
             match.Id,
+            match.Number,
             match.StageId,
             stage?.StageName ?? string.Empty,
             stage?.TournamentName ?? string.Empty,

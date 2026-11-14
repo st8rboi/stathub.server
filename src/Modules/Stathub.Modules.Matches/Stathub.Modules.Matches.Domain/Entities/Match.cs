@@ -7,6 +7,12 @@ namespace Stathub.Modules.Matches.Domain.Entities;
 
 public sealed class Match : AggregateRoot
 {
+    /// <summary>
+    /// Короткий сквозной номер матча (1, 2, 3…) для людей — например, ссылки на трансляционный
+    /// оверлей. Выдаёт база при вставке, до сохранения равен 0. Везде в API ключ — по-прежнему Id.
+    /// </summary>
+    public int Number { get; private set; }
+
     public Guid StageId { get; private set; } // Стадия (этап) турнира
     public Guid TournamentId { get; private set; } // Турнир (сезон) этапа — контекст заявок и составов
     public Guid DivisionId { get; private set; } // Дивизион этапа — граница заявок и статистики игроков

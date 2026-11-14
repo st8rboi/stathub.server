@@ -13,6 +13,11 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.HasKey(m => m.Id);
         builder.Property(m => m.Id).ValueGeneratedNever();
 
+        // Сквозной номер выдаёт PostgreSQL (identity): номера уникальны и без гонок
+        // при одновременном создании матчей. Существующие матчи получают номера при миграции.
+        builder.Property(m => m.Number).UseIdentityByDefaultColumn();
+        builder.HasIndex(m => m.Number).IsUnique();
+
         builder.Property(m => m.StageId).IsRequired();
         // Турнир этапа — контекст заявок и составов; существующие матчи получают пустой Guid
         // миграцией, новые заполняются из этапа при создании.

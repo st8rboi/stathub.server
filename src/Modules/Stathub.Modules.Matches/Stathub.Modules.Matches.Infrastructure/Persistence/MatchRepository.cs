@@ -13,6 +13,11 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
         return await dbContext.Matches.FindAsync(new object[] { id }, cancellationToken);
     }
 
+    public async Task<Match?> GetByNumberAsync(int number, CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Matches.FirstOrDefaultAsync(m => m.Number == number, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Match>> GetByStageIdAsync(Guid stageId, CancellationToken cancellationToken = default)
     {
         return await dbContext.Matches

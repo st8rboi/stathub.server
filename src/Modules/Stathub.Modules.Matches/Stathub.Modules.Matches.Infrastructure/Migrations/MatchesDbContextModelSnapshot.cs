@@ -61,6 +61,12 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<Guid>("HomeTeamId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Number"));
+
                     b.Property<DateTime?>("PausedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -101,6 +107,9 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.HasIndex("DivisionId");
 
                     b.HasIndex("HomeTeamId");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
 
                     b.HasIndex("StageId");
 

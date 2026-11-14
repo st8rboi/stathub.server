@@ -8,6 +8,9 @@ public interface IMatchRepository
 {
     Task<Match?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Матч по короткому сквозному номеру — ссылка на оверлей трансляции.</summary>
+    Task<Match?> GetByNumberAsync(int number, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Match>> GetByStageIdAsync(Guid stageId, CancellationToken cancellationToken = default);
 
     /// <summary>Матчи по набору идентификаторов — «мои матчи» судьи по назначениям.</summary>

@@ -59,6 +59,14 @@ public sealed class MatchService(
     public async Task<MatchDto> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         MatchDto.From(await GetOrThrowAsync(id, cancellationToken));
 
+    /// <summary>Id матча по короткому сквозному номеру (ссылка на оверлей трансляции).</summary>
+    public async Task<Guid> GetIdByNumberAsync(int number, CancellationToken cancellationToken = default)
+    {
+        var match = await repository.GetByNumberAsync(number, cancellationToken)
+            ?? throw new NotFoundException($"Матч №{number} не найден.");
+        return match.Id;
+    }
+
     /// <summary>
     /// Матчи этапа в порядке расписания. Ближайший матч — первый в списке.
     /// </summary>

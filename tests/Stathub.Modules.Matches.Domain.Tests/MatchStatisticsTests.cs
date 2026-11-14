@@ -79,7 +79,7 @@ public sealed class MatchStatisticsTests
 
     [Theory]
     [InlineData(MatchEventType.Shot, null)]
-    [InlineData(MatchEventType.ShotOnTarget, 0)]
+    [InlineData(MatchEventType.ShotOnTarget, 0.0)]
     [InlineData(MatchEventType.Shot, 1.5)]
     [InlineData(MatchEventType.Foul, 0.25)]
     public void ExpectedGoals_RequiredForShots_AndOnlyForShots(MatchEventType type, double? xg)

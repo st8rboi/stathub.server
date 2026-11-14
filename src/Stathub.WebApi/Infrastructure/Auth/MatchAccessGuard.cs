@@ -9,8 +9,8 @@ using Stathub.Shared.Exceptions;
 namespace Stathub.WebApi.Infrastructure.Auth;
 
 /// <summary>
-/// Доступ к матчу: организатор/админ — в пределах своей организации, судья — только
-/// на назначенный ему матч. Проверка идёт по БД на каждый запрос, а не по claims,
+/// Доступ к матчу: организатор/админ — в пределах своей организации, судья и статистик — только
+/// на назначенный им матч. Проверка идёт по БД на каждый запрос, а не по claims,
 /// поэтому отзыв назначения действует сразу.
 /// </summary>
 public sealed class MatchAccessGuard(
@@ -20,28 +20,37 @@ public sealed class MatchAccessGuard(
     IStagePublicReader stagePublicReader,
     ICurrentUser currentUser)
 {
-    public async Task EnsureMatchAsync(Guid matchId, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Проверяет доступ к матчу и возвращает его уровень. Права на протокол определяет назначение
+    /// на этот матч, а не роль в токене: судья матча ведёт его полностью, статистик — только статистику.
+    /// </summary>
+    public async Task<MatchAccess> EnsureMatchAsync(Guid matchId, CancellationToken cancellationToken = default)
     {
         var match = await matchService.GetByIdAsync(matchId, cancellationToken);
 
         if (currentUser.Role is UserRole.Organizer or UserRole.Admin)
         {
             await ownershipGuard.EnsureTournamentAsync(match.TournamentId, cancellationToken);
-            return;
+            return MatchAccess.Full;
         }
 
-        var assignedMatches = await accountService.GetAssignedMatchIdsAsync(
+        var roles = await accountService.GetMatchRolesAsync(
             currentUser.UserId,
             currentUser.TenantId,
+            matchId,
             cancellationToken);
 
-        if (!assignedMatches.Contains(matchId))
+        if (roles.Count == 0)
             throw new ForbiddenException("Этот матч вам не назначен.");
+
+        return roles.All(role => role == UserRole.Statistician)
+            ? MatchAccess.StatisticsOnly
+            : MatchAccess.Full;
     }
 
     /// <summary>
     /// Весь этап доступен только организатору своей лиги. Остальным роль закрывает доступ:
-    /// судья получает лишь отфильтрованный список назначенных матчей (см. MatchesController).
+    /// судья и статистик получают лишь отфильтрованный список назначенных матчей (см. MatchesController).
     /// </summary>
     public async Task EnsureStageAsync(Guid stageId, CancellationToken cancellationToken = default)
     {

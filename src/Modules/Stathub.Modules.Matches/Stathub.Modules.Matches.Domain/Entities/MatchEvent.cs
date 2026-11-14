@@ -145,6 +145,14 @@ public sealed class MatchEvent : Entity
         or MatchEventType.PeriodStarted
         or MatchEventType.MatchFinished;
 
+    /// <summary>Событие командной статистики (удар, фол, угловой): ведёт статистик, на счёт не влияет.</summary>
+    public bool IsStatistic => IsStatisticType(Type);
+
+    public static bool IsStatisticType(MatchEventType type) => type is MatchEventType.Shot
+        or MatchEventType.ShotOnTarget
+        or MatchEventType.Foul
+        or MatchEventType.Corner;
+
     public DateTime EffectiveTimeUtc => OccurredAtUtc ?? ClientTimestampUtc;
 
     public void MarkForReview(string note)
@@ -181,6 +189,14 @@ public sealed class MatchEvent : Entity
                     throw new DomainException("Замена должна быть привязана к команде.");
                 if (playerId is not null && playerId == relatedPlayerId)
                     throw new DomainException("Нельзя заменить игрока на него самого.");
+                break;
+
+            case MatchEventType.Shot:
+            case MatchEventType.ShotOnTarget:
+            case MatchEventType.Foul:
+            case MatchEventType.Corner:
+                if (teamId is null)
+                    throw new DomainException("Событие статистики должно быть привязано к команде.");
                 break;
 
             case MatchEventType.EventVoided:

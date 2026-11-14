@@ -2,6 +2,7 @@ using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Application.Interfaces;
 using Stathub.Modules.Matches.Domain.Entities;
 using Stathub.Modules.Matches.Domain.Enums;
+using Stathub.Modules.Matches.Domain.Services;
 using Stathub.Shared.Exceptions;
 
 namespace Stathub.Modules.Matches.Application;
@@ -45,11 +46,16 @@ public sealed class MatchEventService(
     /// Часы устройства в момент отправки: разница с часами сервера — поправка ко времени всех
     /// событий батча. Работает и при отправке через час после матча, если часы не переводили.
     /// </param>
+    /// <param name="statisticsOnly">
+    /// Автор — статистик: ему доступны только события статистики и их отмена, но не голы,
+    /// карточки и жизненный цикл матча. Такие события отклоняются поштучно, как и прочие отказы.
+    /// </param>
     /// <param name="cancellationToken"></param>
     public async Task<AppendEventsResultDto> AppendEventsAsync(
         Guid matchId,
         IReadOnlyList<NewMatchEvent> incoming,
         DateTime? clientSentAtUtc = null,
+        bool statisticsOnly = false,
         CancellationToken cancellationToken = default)
     {
         if (incoming.Count == 0)
@@ -91,6 +97,9 @@ public sealed class MatchEventService(
                     item.ClientTimestampUtc,
                     item.SequenceNumber,
                     CorrectTime(item.ClientTimestampUtc, clockOffset, nowUtc));
+
+                if (statisticsOnly)
+                    EnsureStatisticianMayAdd(matchEvent, eventsById);
 
                 match.EnsureCanAccept(matchEvent);
                 EnsureVoidTargetIsValid(matchEvent, eventsById);
@@ -169,6 +178,26 @@ public sealed class MatchEventService(
         }
     }
 
+    /// <summary>
+    /// Статистик не управляет матчем: он отмечает удары, фолы и угловые и может отменить
+    /// только такое же событие статистики (например, случайное нажатие).
+    /// </summary>
+    private static void EnsureStatisticianMayAdd(
+        MatchEvent matchEvent,
+        IReadOnlyDictionary<Guid, MatchEvent> eventsById)
+    {
+        if (matchEvent.IsStatistic)
+            return;
+
+        if (matchEvent.Type == MatchEventType.EventVoided
+            && matchEvent.TargetEventId is { } targetId
+            && eventsById.TryGetValue(targetId, out var target)
+            && target.IsStatistic)
+            return;
+
+        throw new DomainException("Статистик может отмечать только удары, фолы и угловые и отменять их.");
+    }
+
     private static void EnsureVoidTargetIsValid(
         MatchEvent matchEvent,
         IReadOnlyDictionary<Guid, MatchEvent> eventsById)
@@ -200,7 +229,13 @@ public sealed class MatchEventService(
             .Select(matchEvent => MatchEventDto.From(matchEvent, voidedEventIds))
             .ToList();
 
-        return new MatchStateDto(MatchDto.From(match), eventDtos);
+        var statistics = MatchStatistics.Compute(match.HomeTeamId, match.AwayTeamId, events);
+
+        return new MatchStateDto(
+            MatchDto.From(match),
+            eventDtos,
+            MatchStatisticsDto.From(statistics),
+            !statistics.IsEmpty);
     }
 
     private async Task<Match> GetMatchOrThrowAsync(Guid matchId, CancellationToken cancellationToken) =>

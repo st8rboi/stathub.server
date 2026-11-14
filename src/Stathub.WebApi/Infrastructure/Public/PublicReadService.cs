@@ -4,6 +4,7 @@ using Stathub.Modules.Leagues.Application.Interfaces;
 using Stathub.Modules.Leagues.Domain.Enums;
 using Stathub.Modules.Matches.Application;
 using Stathub.Modules.Matches.Application.Dtos;
+using Stathub.Modules.Matches.Domain.Entities;
 using Stathub.Modules.Matches.Domain.Enums;
 using Stathub.Modules.Matches.Domain.Services;
 using Stathub.Modules.Players.Application;
@@ -185,10 +186,24 @@ public sealed class PublicReadService(
             .Select(matchEvent => (matchEvent.Type, matchEvent.OccurredAtUtc))
             .ToList());
 
+        // Удары, фолы и угловые зритель видит цифрами на вкладке «Статистика», а не строками протокола;
+        // вместе с ними скрываются и отмены этих событий.
+        var statisticEventIds = state.Events
+            .Where(matchEvent => MatchEvent.IsStatisticType(matchEvent.Type))
+            .Select(matchEvent => matchEvent.Id)
+            .ToHashSet();
+
+        bool IsStatisticRow(MatchEventDto matchEvent) =>
+            statisticEventIds.Contains(matchEvent.Id)
+            || (matchEvent.Type == MatchEventType.EventVoided
+                && matchEvent.TargetEventId is { } targetId
+                && statisticEventIds.Contains(targetId));
+
         // Паузы внутри периода — служебная деталь судьи, зрителю они видны по стоящим часам.
         var events = state.Events
             .Select((matchEvent, index) => (matchEvent, mark: clock[index]))
             .Where(item => item.matchEvent.Type is not (MatchEventType.MatchPaused or MatchEventType.MatchResumed))
+            .Where(item => !IsStatisticRow(item.matchEvent))
             .Select(item => new PublicEventDto(
                 item.matchEvent.Id,
                 item.matchEvent.Type.ToString(),
@@ -205,7 +220,10 @@ public sealed class PublicReadService(
                 item.matchEvent.PlayerId is { } photoPlayerId ? playerPhotos.GetValueOrDefault(photoPlayerId) : null))
             .ToList();
 
-        return new PublicMatchPageDto(ToPublicMatch(state.Match, stage, teams), events);
+        return new PublicMatchPageDto(
+            ToPublicMatch(state.Match, stage, teams),
+            events,
+            state.HasStatistics ? state.Statistics : null);
     }
 
     /// <summary>

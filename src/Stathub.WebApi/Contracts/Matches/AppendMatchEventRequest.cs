@@ -15,6 +15,7 @@ namespace Stathub.WebApi.Contracts.Matches;
 /// <param name="Reason">Причина отмены или пояснение</param>
 /// <param name="ClientTimestampUtc">Момент события по часам устройства судьи</param>
 /// <param name="SequenceNumber">Порядок события внутри матча (назначает клиент)</param>
+/// <param name="ExpectedGoals">xG удара (опасность момента, 0–1) — только для Shot/ShotOnTarget</param>
 public sealed record AppendMatchEventRequest(
     Guid Id,
     MatchEventType Type,
@@ -24,4 +25,5 @@ public sealed record AppendMatchEventRequest(
     Guid? TargetEventId,
     string? Reason,
     DateTime ClientTimestampUtc,
-    long SequenceNumber);
+    long SequenceNumber,
+    decimal? ExpectedGoals = null);

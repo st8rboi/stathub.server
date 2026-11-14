@@ -21,7 +21,8 @@ public sealed record MatchEventDto(
     string? ReviewNote,
     long SequenceNumber,
     DateTime CreatedAtUtc,
-    bool IsVoided)
+    bool IsVoided,
+    decimal? ExpectedGoals)
 {
     internal static MatchEventDto From(MatchEvent matchEvent, IReadOnlySet<Guid> voidedEventIds) => new(
         matchEvent.Id,
@@ -37,5 +38,6 @@ public sealed record MatchEventDto(
         matchEvent.ReviewNote,
         matchEvent.SequenceNumber,
         matchEvent.CreatedAtUtc,
-        voidedEventIds.Contains(matchEvent.Id));
+        voidedEventIds.Contains(matchEvent.Id),
+        matchEvent.ExpectedGoals);
 }

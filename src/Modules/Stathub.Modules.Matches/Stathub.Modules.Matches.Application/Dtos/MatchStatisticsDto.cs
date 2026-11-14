@@ -12,12 +12,13 @@ public sealed record MatchStatisticsDto(
         TeamMatchStatisticsDto.From(statistics.Away));
 }
 
-/// <summary><see cref="Shots"/> — все удары, включая удары в створ.</summary>
-public sealed record TeamMatchStatisticsDto(int Shots, int ShotsOnTarget, int Fouls, int Corners)
+/// <summary><see cref="Shots"/> — все удары, включая удары в створ; <see cref="ExpectedGoals"/> — сумма xG ударов.</summary>
+public sealed record TeamMatchStatisticsDto(int Shots, int ShotsOnTarget, int Fouls, int Corners, decimal ExpectedGoals)
 {
     internal static TeamMatchStatisticsDto From(TeamMatchStatistics statistics) => new(
         statistics.Shots,
         statistics.ShotsOnTarget,
         statistics.Fouls,
-        statistics.Corners);
+        statistics.Corners,
+        statistics.ExpectedGoals);
 }

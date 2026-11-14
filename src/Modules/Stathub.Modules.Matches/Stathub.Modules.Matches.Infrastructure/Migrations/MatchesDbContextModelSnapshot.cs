@@ -118,6 +118,10 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal?>("ExpectedGoals")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)");
+
                     b.Property<Guid>("MatchId")
                         .HasColumnType("uuid");
 

@@ -22,8 +22,10 @@ public sealed class StandingsService(
         var rules = await rulesSource.GetAsync(stageId, cancellationToken)
             ?? throw new NotFoundException($"Правила этапа '{stageId}' не найдены.");
 
-        var matches = await matchSource.GetFinishedMatchesAsync(stageId, cancellationToken);
+        // Идущие матчи входят в расчёт с текущим счётом: таблица «живая» и меняется после каждого гола.
+        var matches = await matchSource.GetMatchesAsync(stageId, cancellationToken);
         var tables = StandingsCalculator.CalculateTables(matches, rules);
+        var liveByTeam = LiveMatchesByTeam(matches);
 
         var teamIds = tables
             .SelectMany(table => table.Entries)
@@ -35,7 +37,7 @@ public sealed class StandingsService(
             : await teamNameSource.GetTeamsAsync(teamIds, cancellationToken);
 
         var tableRows = tables
-            .Select(table => (table, rows: ToRows(table, teams)))
+            .Select(table => (table, rows: ToRows(table, teams, liveByTeam)))
             .ToList();
 
         return new StageStandingsDto(
@@ -52,14 +54,32 @@ public sealed class StandingsService(
             rules.EliminatedCount);
     }
 
+    /// <summary>Идущий матч каждой играющей сейчас команды.</summary>
+    private static Dictionary<Guid, StandingsMatch> LiveMatchesByTeam(IEnumerable<StandingsMatch> matches)
+    {
+        var result = new Dictionary<Guid, StandingsMatch>();
+
+        foreach (var match in matches.Where(match => match.IsLive))
+        {
+            result[match.HomeTeamId] = match;
+            result[match.AwayTeamId] = match;
+        }
+
+        return result;
+    }
+
     private static List<StandingsRowDto> ToRows(
         StandingsTable table,
-        IReadOnlyDictionary<Guid, StandingsTeamDto> teams) =>
+        IReadOnlyDictionary<Guid, StandingsTeamDto> teams,
+        IReadOnlyDictionary<Guid, StandingsMatch> liveByTeam) =>
         table.Entries
             .Select((entry, index) =>
             {
                 var team = teams.GetValueOrDefault(entry.TeamId);
                 var position = index + 1;
+                var live = liveByTeam.GetValueOrDefault(entry.TeamId) is { } liveMatch
+                    ? ToLive(liveMatch, entry.TeamId)
+                    : null;
 
                 return new StandingsRowDto(
                     entry.TeamId,
@@ -75,7 +95,14 @@ public sealed class StandingsService(
                     entry.Points,
                     position,
                     table.Qualifies(position),
-                    table.Eliminated(position));
+                    table.Eliminated(position),
+                    live);
             })
             .ToList();
+
+    private static StandingsLiveMatchDto ToLive(StandingsMatch match, Guid teamId)
+    {
+        var (scored, conceded) = match.ScoreFor(teamId);
+        return new StandingsLiveMatchDto(match.MatchId, scored, conceded, match.OutcomeFor(teamId));
+    }
 }

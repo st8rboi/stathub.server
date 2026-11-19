@@ -131,4 +131,49 @@ public sealed class StandingsTests
         // и порядок между ними стабилизирован по Id команды.
         Assert.Equal([Gamma, Alpha, Beta], first.Select(row => row.TeamId));
     }
+
+    [Fact]
+    public void Calculate_CountsLiveMatchWithCurrentScore()
+    {
+        var matches = new[]
+        {
+            new StandingsMatch(Alpha, Beta, 1, 0),
+            new StandingsMatch(Gamma, Alpha, 2, 0, IsLive: true)
+        };
+
+        var table = StandingsCalculator.Calculate(matches, Classic);
+
+        // Gamma выигрывает идущий матч — в live-таблице она уже впереди Alpha.
+        Assert.Equal([Gamma, Alpha, Beta], table.Select(row => row.TeamId));
+        var alpha = table.Single(row => row.TeamId == Alpha);
+        Assert.Equal(2, alpha.Played);
+        Assert.Equal(1, alpha.Losses);
+    }
+
+    [Fact]
+    public void Calculate_ReordersAfterGoalInLiveMatch()
+    {
+        var finished = new StandingsMatch(Alpha, Gamma, 1, 0);
+
+        var before = StandingsCalculator.Calculate(
+            [finished, new StandingsMatch(Beta, Gamma, 0, 0, IsLive: true)], Classic);
+        var afterGoal = StandingsCalculator.Calculate(
+            [finished, new StandingsMatch(Beta, Gamma, 0, 1, IsLive: true)], Classic);
+
+        Assert.Equal([Alpha, Beta, Gamma], before.Select(row => row.TeamId));
+        Assert.Equal([Alpha, Gamma, Beta], afterGoal.Select(row => row.TeamId));
+    }
+
+    [Theory]
+    [InlineData(2, 1, LiveOutcome.Win, LiveOutcome.Loss)]
+    [InlineData(1, 1, LiveOutcome.Draw, LiveOutcome.Draw)]
+    [InlineData(0, 3, LiveOutcome.Loss, LiveOutcome.Win)]
+    public void OutcomeFor_IsSeenFromTeamSide(int home, int away, LiveOutcome homeOutcome, LiveOutcome awayOutcome)
+    {
+        var match = new StandingsMatch(Alpha, Beta, home, away, IsLive: true);
+
+        Assert.Equal(homeOutcome, match.OutcomeFor(Alpha));
+        Assert.Equal(awayOutcome, match.OutcomeFor(Beta));
+        Assert.Equal((away, home), match.ScoreFor(Beta));
+    }
 }

@@ -7,11 +7,11 @@ namespace Stathub.Modules.Standings.Infrastructure.Services;
 /// <summary>Адаптер «порт таблицы → читатель результатов модуля Matches».</summary>
 public sealed class MatchResultsSource(IMatchResultsReader matchResultsReader) : IStandingsMatchSource
 {
-    public async Task<IReadOnlyList<StandingsMatch>> GetFinishedMatchesAsync(
+    public async Task<IReadOnlyList<StandingsMatch>> GetMatchesAsync(
         Guid stageId,
         CancellationToken cancellationToken = default)
     {
-        var matches = await matchResultsReader.GetFinishedByStageAsync(stageId, cancellationToken);
+        var matches = await matchResultsReader.GetResultsByStageAsync(stageId, cancellationToken);
 
         return matches
             .Select(match => new StandingsMatch(
@@ -19,7 +19,9 @@ public sealed class MatchResultsSource(IMatchResultsReader matchResultsReader) :
                 match.AwayTeamId,
                 match.HomeScore,
                 match.AwayScore,
-                match.GroupId))
+                match.GroupId,
+                match.IsLive,
+                match.MatchId))
             .ToList();
     }
 }

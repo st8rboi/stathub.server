@@ -143,7 +143,7 @@ public sealed class MatchesController(
             cancellationToken);
 
         await feeService.ReassignMatchTeamsAsync(id, match.HomeTeamId, match.AwayTeamId, cancellationToken);
-        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
+        await matchNotifier.PublishMatchChangedAsync(id, match.StageId, cancellationToken);
 
         return Ok(match);
     }
@@ -192,7 +192,7 @@ public sealed class MatchesController(
             cancellationToken);
 
         // Пуш зрителям — только после коммита; сам пуш best-effort (doc §4, §9).
-        await matchNotifier.PublishMatchChangedAsync(id, cancellationToken);
+        await matchNotifier.PublishMatchChangedAsync(id, result.State.Match.StageId, cancellationToken);
 
         return Ok(result);
     }

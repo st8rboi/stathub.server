@@ -178,6 +178,18 @@ public sealed class RosterService(
         return entries.Select(TournamentTeamDetailsDto.From).ToList();
     }
 
+    /// <summary>
+    /// Все заявки команд, где игрок был заявлен (с составами), новые первыми — публичный профиль игрока.
+    /// Видимость (опубликована ли лига) решает вызывающий: модуль о публикации не знает.
+    /// </summary>
+    public async Task<IReadOnlyList<TournamentTeamDetailsDto>> ListByPlayerAsync(
+        Guid playerId,
+        CancellationToken cancellationToken = default)
+    {
+        var entries = await repository.ListByPlayerAsync(playerId, cancellationToken);
+        return entries.Select(TournamentTeamDetailsDto.From).ToList();
+    }
+
     public async Task<TournamentTeamDetailsDto> GetTeamAsync(
         Guid divisionId,
         Guid tournamentTeamId,

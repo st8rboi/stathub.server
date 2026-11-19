@@ -72,6 +72,13 @@ public sealed class PublicController(PublicReadService publicReadService) : Cont
         CancellationToken cancellationToken) =>
         Ok(await publicReadService.GetTeamPageAsync(id, stageId, cancellationToken));
 
+    /// <summary>Профиль игрока: выступления за команды в опубликованных лигах со статистикой.</summary>
+    [HttpGet("players/{id:guid}")]
+    public async Task<ActionResult<PublicPlayerPageDto>> GetPlayer(
+        Guid id,
+        CancellationToken cancellationToken) =>
+        Ok(await publicReadService.GetPlayerPageAsync(id, cancellationToken));
+
     /// <summary>
     /// Статистика игроков: голы, автоголы, карточки и матчи с событиями. Считается по дивизиону
     /// <paramref name="divisionId"/>; если он не указан — по первому дивизиону турнира.

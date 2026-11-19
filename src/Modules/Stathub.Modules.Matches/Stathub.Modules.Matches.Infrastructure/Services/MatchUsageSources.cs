@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Stathub.Modules.Leagues.Application.Interfaces;
+using Stathub.Modules.Matches.Application;
+using Stathub.Modules.Matches.Domain.Enums;
 using Stathub.Modules.Matches.Infrastructure.Persistence;
 using Stathub.Modules.Players.Application.Dtos;
 using Stathub.Modules.Players.Application.Interfaces;
@@ -84,6 +86,23 @@ internal sealed class MatchCompetitionUsageSource(MatchesDbContext dbContext) : 
 
     public Task<bool> StageHasMatchesAsync(Guid stageId, CancellationToken cancellationToken = default) =>
         dbContext.Matches.AnyAsync(match => match.StageId == stageId, cancellationToken);
+
+    // Начат — идёт, на перерыве, сыгран или по нему уже есть события (судья мог начать офлайн).
+    public Task<bool> StageHasStartedMatchesAsync(Guid stageId, CancellationToken cancellationToken = default) =>
+        dbContext.Matches.AnyAsync(
+            match => match.StageId == stageId
+                     && (match.Status == MatchStatus.InProgress
+                         || match.Status == MatchStatus.Pause
+                         || match.Status == MatchStatus.Finished
+                         || dbContext.MatchEvents.Any(matchEvent => matchEvent.MatchId == match.Id)),
+            cancellationToken);
+}
+
+/// <summary>Новые правила этапа — в его не начатые матчи (снимок регламента в матче).</summary>
+internal sealed class MatchStageRulesSubscriber(MatchService matchService) : IStageRulesSubscriber
+{
+    public Task ApplyStageRulesAsync(Guid stageId, CancellationToken cancellationToken = default) =>
+        matchService.ApplyStageFormatAsync(stageId, cancellationToken);
 }
 
 /// <summary>Матчи и события команды в дивизионе — для проверки перед удалением заявок.</summary>

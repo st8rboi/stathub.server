@@ -27,6 +27,7 @@ public sealed class MatchFormatProvider(
             PeriodDurationMinutes: rules.PeriodDurationMinutes,
             ExtraTimeEnabled: rules.ExtraTimeEnabled,
             PenaltyShootoutEnabled: rules.PenaltyShootoutEnabled,
+            BonusGoalEnabled: rules.BonusGoalEnabled,
             Groups: rules.Groups.Select(group => new MatchGroupDto(group.GroupId, group.TeamIds)).ToList());
     }
 }

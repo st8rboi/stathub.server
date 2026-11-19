@@ -96,6 +96,7 @@ public sealed record StageDto(
     int PeriodsCount,
     bool ExtraTimeEnabled,
     bool PenaltyShootoutEnabled,
+    bool BonusGoalEnabled,
     int? QualifiersCount,
     IReadOnlyList<StageGroupDto> Groups)
 {
@@ -112,6 +113,7 @@ public sealed record StageDto(
         stage.MatchFormatRule.PeriodsCount,
         stage.MatchFormatRule.ExtraTimeEnabled,
         stage.MatchFormatRule.PenaltyShootoutEnabled,
+        stage.MatchFormatRule.BonusGoalEnabled,
         stage.QualifiersCount,
         stage.Groups.OrderBy(group => group.Order).Select(StageGroupDto.From).ToList());
 }

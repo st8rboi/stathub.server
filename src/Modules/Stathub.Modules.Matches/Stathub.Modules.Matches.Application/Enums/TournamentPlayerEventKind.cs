@@ -10,5 +10,6 @@ public enum TournamentPlayerEventKind
     Goal = 0,
     OwnGoal = 1,
     YellowCard = 2,
-    RedCard = 3
+    RedCard = 3,
+    PenaltyMissed = 4
 }

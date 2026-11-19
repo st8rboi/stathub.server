@@ -11,5 +11,6 @@ public enum PlayerEventKind
     OwnGoal = 1,
     YellowCard = 2,
     RedCard = 3,
-    Assist = 4
+    Assist = 4,
+    PenaltyMissed = 5
 }

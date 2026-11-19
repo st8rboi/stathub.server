@@ -38,7 +38,8 @@ public sealed class MatchService(
             periodsCount: stageFormat.PeriodsCount,
             periodDurationMinutes: stageFormat.PeriodDurationMinutes,
             extraTimeEnabled: stageFormat.ExtraTimeEnabled,
-            penaltyShootoutEnabled: stageFormat.PenaltyShootoutEnabled);
+            penaltyShootoutEnabled: stageFormat.PenaltyShootoutEnabled,
+            bonusGoalEnabled: stageFormat.BonusGoalEnabled);
 
         var match = Match.Create(
             stageId,
@@ -188,6 +189,34 @@ public sealed class MatchService(
         match.EnsureCanDelete(await HasEventsAsync(id, cancellationToken));
 
         repository.Remove(match);
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Переносит текущие правила этапа в его не начатые матчи (снимок регламента делается при
+    /// создании матча, а правила этапа разрешено менять до первого начатого матча).
+    /// Начатые и сыгранные матчи не трогаются: они идут по правилам, с которыми начались.
+    /// </summary>
+    public async Task ApplyStageFormatAsync(Guid stageId, CancellationToken cancellationToken = default)
+    {
+        var matches = await repository.GetByStageIdAsync(stageId, cancellationToken);
+        if (matches.Count == 0)
+            return;
+
+        var stageFormat = await matchFormatProvider.GetByStageIdAsync(stageId, cancellationToken);
+        var format = MatchFormat.Create(
+            periodsCount: stageFormat.PeriodsCount,
+            periodDurationMinutes: stageFormat.PeriodDurationMinutes,
+            extraTimeEnabled: stageFormat.ExtraTimeEnabled,
+            penaltyShootoutEnabled: stageFormat.PenaltyShootoutEnabled,
+            bonusGoalEnabled: stageFormat.BonusGoalEnabled);
+
+        foreach (var match in matches.Where(match => match.Status == MatchStatus.Scheduled))
+        {
+            if (!await HasEventsAsync(match.Id, cancellationToken))
+                match.ApplyFormat(format, hasEvents: false);
+        }
+
         await repository.SaveChangesAsync(cancellationToken);
     }
 

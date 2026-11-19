@@ -34,6 +34,7 @@ public static class MatchesModule
         services.AddScoped<ITeamUsageSource, MatchTeamUsageSource>();
         services.AddScoped<IPlayerUsageSource, MatchPlayerUsageSource>();
         services.AddScoped<ICompetitionUsageSource, MatchCompetitionUsageSource>();
+        services.AddScoped<IStageRulesSubscriber, MatchStageRulesSubscriber>();
         services.AddScoped<IRosterUsageSource, MatchRosterUsageSource>();
         services.AddScoped<MatchService>();
         services.AddScoped<MatchEventService>();

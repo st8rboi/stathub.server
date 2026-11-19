@@ -17,6 +17,12 @@ public interface ICompetitionUsageSource
     /// <summary>Описание ссылок на этап или null, если их нет.</summary>
     Task<string?> GetStageUsageAsync(Guid stageId, CancellationToken cancellationToken = default);
 
-    /// <summary>Есть ли в этапе матчи — от этого зависит, можно ли менять его правила.</summary>
+    /// <summary>Есть ли в этапе матчи — от этого зависит, можно ли менять его группы.</summary>
     Task<bool> StageHasMatchesAsync(Guid stageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Есть ли в этапе начатые матчи (идут, сыграны или по ним есть события протокола) —
+    /// от этого зависит, можно ли менять правила этапа.
+    /// </summary>
+    Task<bool> StageHasStartedMatchesAsync(Guid stageId, CancellationToken cancellationToken = default);
 }

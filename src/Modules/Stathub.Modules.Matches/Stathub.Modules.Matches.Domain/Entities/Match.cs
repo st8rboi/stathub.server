@@ -36,6 +36,7 @@ public sealed class Match : AggregateRoot
     public int PeriodDurationMinutes { get; private set; }
     public bool ExtraTimeEnabled { get; private set; }
     public bool PenaltyShootoutEnabled { get; private set; }
+    public bool BonusGoalEnabled { get; private set; } // Разрешён ли бонусный мяч (гол за два)
 
     public int CurrentPeriod { get; private set; } // Текущий период; 0 — матч ещё не начат
     public DateTime? PeriodStartedAtUtc { get; private set; } // Когда начался текущий период
@@ -78,6 +79,7 @@ public sealed class Match : AggregateRoot
         PeriodDurationMinutes = format.PeriodDurationMinutes;
         ExtraTimeEnabled = format.ExtraTimeEnabled;
         PenaltyShootoutEnabled = format.PenaltyShootoutEnabled;
+        BonusGoalEnabled = format.BonusGoalEnabled;
 
         CurrentPeriod = 0;
         PeriodStartedAtUtc = null;
@@ -156,6 +158,22 @@ public sealed class Match : AggregateRoot
     /// Сыгранный матч — часть таблицы и статистики.
     /// </summary>
     public void EnsureCanDelete(bool hasEvents) => EnsureNotStarted(hasEvents, "Удалить");
+
+    /// <summary>
+    /// Новый регламент этапа для ещё не начатого матча: правила этапа поменяли до первого
+    /// свистка. Начатый матч доигрывается по тем правилам, с которыми его начали.
+    /// </summary>
+    public void ApplyFormat(MatchFormat format, bool hasEvents)
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        EnsureNotStarted(hasEvents, "Изменить регламент");
+
+        PeriodsCount = format.PeriodsCount;
+        PeriodDurationMinutes = format.PeriodDurationMinutes;
+        ExtraTimeEnabled = format.ExtraTimeEnabled;
+        PenaltyShootoutEnabled = format.PenaltyShootoutEnabled;
+        BonusGoalEnabled = format.BonusGoalEnabled;
+    }
 
     private void EnsureNotStarted(bool hasEvents, string action)
     {
@@ -284,6 +302,7 @@ public sealed class Match : AggregateRoot
     /// суммировать события на каждый запрос (см. документацию, раздел 9).
     /// Отменённые события (на которые ссылается активный <c>EventVoided</c>) не учитываются,
     /// а автогол засчитывается сопернику команды, в чьи ворота он забит.
+    /// Бонусный мяч добавляет к счёту <see cref="MatchEvent.ScoreValue"/> (два).
     /// </summary>
     public void RebuildScoreProjection(IReadOnlyCollection<MatchEvent> events)
     {
@@ -313,10 +332,10 @@ public sealed class Match : AggregateRoot
             switch (matchEvent.Type)
             {
                 case MatchEventType.Goal when matchEvent.TeamId == HomeTeamId:
-                    homeScore++;
+                    homeScore += matchEvent.ScoreValue;
                     break;
                 case MatchEventType.Goal when matchEvent.TeamId == AwayTeamId:
-                    awayScore++;
+                    awayScore += matchEvent.ScoreValue;
                     break;
                 case MatchEventType.OwnGoal when matchEvent.TeamId == HomeTeamId:
                     awayScore++;
@@ -339,6 +358,9 @@ public sealed class Match : AggregateRoot
             EnsureEventsCanBeChanged();
 
         EnsureEventBelongsToMatch(matchEvent);
+
+        if (matchEvent.GoalKind == GoalKind.Bonus && !BonusGoalEnabled)
+            throw new DomainException("Бонусный мяч не предусмотрен регламентом этапа.");
     }
 
     /// <summary>

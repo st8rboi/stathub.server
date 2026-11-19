@@ -221,7 +221,8 @@ public sealed class PublicReadService(
                 item.matchEvent.TargetEventId,
                 item.mark?.Period,
                 item.mark?.ElapsedSeconds,
-                item.matchEvent.PlayerId is { } photoPlayerId ? playerPhotos.GetValueOrDefault(photoPlayerId) : null))
+                item.matchEvent.PlayerId is { } photoPlayerId ? playerPhotos.GetValueOrDefault(photoPlayerId) : null,
+                item.matchEvent.GoalKind?.ToString()))
             .ToList();
 
         return new PublicMatchPageDto(
@@ -387,7 +388,9 @@ public sealed class PublicReadService(
                     row?.Assists ?? 0,
                     row?.OwnGoals ?? 0,
                     row?.YellowCards ?? 0,
-                    row?.RedCards ?? 0);
+                    row?.RedCards ?? 0,
+                    row?.PenaltyGoals ?? 0,
+                    row?.PenaltiesMissed ?? 0);
             })
             .OrderBy(player => player.Status == nameof(PlayerRegistrationStatus.Active) ? 0 : 1)
             .ThenBy(player => player.FullName, StringComparer.CurrentCulture)

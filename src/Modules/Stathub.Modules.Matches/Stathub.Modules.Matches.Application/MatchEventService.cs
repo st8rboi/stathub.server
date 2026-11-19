@@ -97,7 +97,8 @@ public sealed class MatchEventService(
                     item.ClientTimestampUtc,
                     item.SequenceNumber,
                     CorrectTime(item.ClientTimestampUtc, clockOffset, nowUtc),
-                    item.ExpectedGoals);
+                    item.ExpectedGoals,
+                    item.GoalKind);
 
                 if (statisticsOnly)
                     EnsureStatisticianMayAdd(matchEvent, eventsById);

@@ -131,8 +131,10 @@ public sealed class Tournament : AggregateRoot
     }
 
     /// <summary>
-    /// Изменение этапа. Название меняется всегда. Правила — только пока турнир не начат и
-    /// в этапе нет матчей: матч копирует формат при создании, а очки сразу пересчитывают таблицу.
+    /// Изменение этапа. Название меняется всегда. Правила — пока в этапе не начат ни один матч:
+    /// не начатые матчи получают новый регламент (это делает вызывающий после сохранения),
+    /// а очки без сыгранных матчей таблицу не меняют. В завершённом или отменённом турнире
+    /// правила не меняются.
     /// </summary>
     public Stage UpdateStage(
         Guid stageId,
@@ -141,19 +143,19 @@ public sealed class Tournament : AggregateRoot
         PointsRule pointsRule,
         MatchFormatRule matchFormatRule,
         int? qualifiersCount,
-        bool stageHasMatches)
+        bool stageHasStartedMatches)
     {
         var stage = GetStage(stageId);
 
         if (stage.HasDifferentRules(formatType, pointsRule, matchFormatRule))
         {
-            if (Status != TournamentStatus.Scheduled)
+            if (Status is TournamentStatus.Completed or TournamentStatus.Cancelled)
                 throw new ConflictException(
-                    "Правила этапа можно менять только до начала турнира. Изменить можно только название.");
+                    "Правила этапа завершённого или отменённого турнира менять нельзя. Изменить можно только название.");
 
-            if (stageHasMatches)
+            if (stageHasStartedMatches)
                 throw new ConflictException(
-                    "Правила этапа нельзя менять: в нём уже есть матчи. Изменить можно только название.");
+                    "Правила этапа нельзя менять: в нём уже начаты матчи. Изменить можно только название.");
         }
 
         // Число выходящих дальше — пометка в таблице, а не правило матча: его можно менять всегда.

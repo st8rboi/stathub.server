@@ -10,7 +10,7 @@ namespace Stathub.Modules.Matches.Application.Interfaces;
 public interface ITournamentPlayerEventReader
 {
     /// <summary>
-    /// Значимые события (голы, автоголы, карточки) с указанным игроком, кроме отменённых.
+    /// Значимые события (голы, автоголы, карточки, нереализованные пенальти) с указанным игроком, кроме отменённых.
     /// </summary>
     Task<IReadOnlyList<TournamentPlayerEventDto>> GetByDivisionAsync(
         Guid divisionId,

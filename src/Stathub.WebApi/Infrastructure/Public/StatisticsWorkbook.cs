@@ -29,11 +29,11 @@ public static class StatisticsWorkbook
             .ToList();
 
         var writer = new XlsxWriter()
-            .SetColumnWidths(5, 36, 32, 6, 6, 6, 7, 6, 6, 6)
+            .SetColumnWidths(5, 36, 32, 6, 6, 6, 7, 6, 6, 6, 6, 6)
             .AddRow([$"Статистика игроков: {title}"], bold: true)
             .AddRow([$"Сформировано {generatedAtUtc:dd.MM.yyyy HH:mm} UTC · статхаб.рф"])
             .AddRow([])
-            .AddTableHeader(["№", "Игрок", "Команда", "М", "Г", "А", "Г+П", "АГ", "ЖК", "КК"]);
+            .AddTableHeader(["№", "Игрок", "Команда", "М", "Г", "А", "Г+П", "АГ", "ЖК", "КК", "Пен", "НП"]);
 
         for (var index = 0; index < rows.Count; index++)
         {
@@ -48,12 +48,14 @@ public static class StatisticsWorkbook
                 row.Goals + row.Assists,
                 row.OwnGoals,
                 row.YellowCards,
-                row.RedCards
+                row.RedCards,
+                row.PenaltyGoals,
+                row.PenaltiesMissed
             ]);
         }
 
         writer.AddRow([]);
-        writer.AddRow(["М — матчи, в которых у игрока было событие; Г — голы; А — передачи; АГ — автоголы; ЖК/КК — карточки. Отменённые события не учитываются."]);
+        writer.AddRow(["М — матчи, в которых у игрока было событие; Г — голы (бонусный мяч — за два); А — передачи; АГ — автоголы; ЖК/КК — карточки; Пен — из них голов с пенальти; НП — незабитые пенальти. Отменённые события не учитываются."]);
 
         return ($"{SafeFileName($"Статистика — {title}")}.xlsx", writer.Build("Статистика"));
     }

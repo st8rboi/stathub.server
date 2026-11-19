@@ -12,4 +12,6 @@ public sealed record PlayerStatisticsRowDto(
     int Assists,
     int OwnGoals,
     int YellowCards,
-    int RedCards);
+    int RedCards,
+    int PenaltyGoals,
+    int PenaltiesMissed);

@@ -26,6 +26,7 @@ public sealed class StageReader(IStageRepository repository) : IStageReader
             PeriodDurationMinutes: rule.PeriodDurationMinutes,
             ExtraTimeEnabled: rule.ExtraTimeEnabled,
             PenaltyShootoutEnabled: rule.PenaltyShootoutEnabled,
+            BonusGoalEnabled: rule.BonusGoalEnabled,
             Groups: stage.Groups
                 .OrderBy(group => group.Order)
                 .Select(group => new StageGroupTeamsDto(group.Id, group.Name, group.Order, group.TeamIds.ToList()))

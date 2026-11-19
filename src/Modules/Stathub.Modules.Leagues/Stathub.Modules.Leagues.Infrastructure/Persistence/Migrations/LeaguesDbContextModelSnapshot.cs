@@ -242,6 +242,10 @@ namespace Stathub.Modules.Leagues.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("StageId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<bool>("BonusGoalEnabled")
+                                .HasColumnType("boolean")
+                                .HasColumnName("bonus_goal_enabled");
+
                             b1.Property<bool>("ExtraTimeEnabled")
                                 .HasColumnType("boolean")
                                 .HasColumnName("extra_time_enabled");

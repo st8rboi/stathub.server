@@ -40,6 +40,7 @@ internal sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.Property(m => m.PeriodDurationMinutes).IsRequired();
         builder.Property(m => m.ExtraTimeEnabled).IsRequired();
         builder.Property(m => m.PenaltyShootoutEnabled).IsRequired();
+        builder.Property(m => m.BonusGoalEnabled).IsRequired();
 
         // Заполняются только когда матч начат, до старта CurrentPeriod = 0
         builder.Property(m => m.CurrentPeriod).IsRequired();

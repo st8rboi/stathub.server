@@ -83,6 +83,9 @@ internal sealed class RosterCompetitionUsageSource(RostersDbContext dbContext) :
     // Заявки не мешают менять правила этапа: формат матча и очки на них не влияют.
     public Task<bool> StageHasMatchesAsync(Guid stageId, CancellationToken cancellationToken = default) =>
         Task.FromResult(false);
+
+    public Task<bool> StageHasStartedMatchesAsync(Guid stageId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
 }
 
 /// <summary>Команды дивизиона для модуля Leagues: в группу этапа попадают только заявленные команды.</summary>

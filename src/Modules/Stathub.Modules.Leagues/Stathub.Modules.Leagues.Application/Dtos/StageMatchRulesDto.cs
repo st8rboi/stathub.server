@@ -12,6 +12,7 @@ public sealed record StageMatchRulesDto(
     int PeriodsCount,
     bool ExtraTimeEnabled,
     bool PenaltyShootoutEnabled,
+    bool BonusGoalEnabled,
     IReadOnlyList<StageGroupTeamsDto> Groups);
 
 /// <summary>Группа этапа и её команды — без доменных типов Leagues.</summary>

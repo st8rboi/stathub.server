@@ -120,7 +120,10 @@ public sealed record PublicEventDto(
     int? Period,
     int? ElapsedSeconds,
     string? PlayerPhotoUrl,
-    string? GoalKind);
+    string? GoalKind,
+    // Id игроков — для ссылок на профиль; null у события без игрока.
+    Guid? PlayerId,
+    Guid? RelatedPlayerId);
 
 /// <summary>
 /// Страница матча. <see cref="Statistics"/> — командная статистика от статистика;
@@ -228,6 +231,7 @@ public sealed record PublicTeamParticipationDto(
 /// <summary>
 /// Игрок заявки команды в дивизион со статистикой за матчи команды во всех этапах дивизиона.
 /// Отзаявленные и ушедшие трансфером остаются в списке: история не скрывается.
+/// <see cref="FullName"/> — «Фамилия Имя», без отчества (как везде на витрине).
 /// </summary>
 public sealed record PublicTeamPlayerDto(
     Guid PlayerId,
@@ -258,3 +262,45 @@ public sealed record PublicTeamPageDto(
     IReadOnlyList<StandingsRowDto> Standings,
     IReadOnlyList<PublicTeamPlayerDto> Players,
     IReadOnlyList<StandingsGroupDto> StandingsGroups);
+
+/// <summary>Шапка профиля игрока. <see cref="FullName"/> — «Фамилия Имя», без отчества.</summary>
+public sealed record PublicPlayerDto(
+    Guid Id,
+    string FullName,
+    string? PhotoUrl,
+    DateOnly? BirthDate);
+
+/// <summary>
+/// Выступление игрока: одна заявка за команду в дивизион турнира опубликованной лиги и
+/// статистика за эту команду во всех этапах дивизиона. <see cref="StageId"/> — этап, на котором
+/// открывается страница команды по ссылке из строки.
+/// </summary>
+public sealed record PublicPlayerCareerRowDto(
+    Guid TournamentId,
+    string TournamentName,
+    string LeagueName,
+    string LeagueSlug,
+    string? LeagueLogoUrl,
+    Guid DivisionId,
+    // null, если дивизион в турнире один
+    string? DivisionName,
+    Guid StageId,
+    Guid TeamId,
+    string TeamName,
+    string? TeamLogoUrl,
+    string Status,
+    DateOnly JoinedOn,
+    DateOnly? LeftOn,
+    int Matches,
+    int Goals,
+    int Assists,
+    int OwnGoals,
+    int YellowCards,
+    int RedCards,
+    int PenaltyGoals,
+    int PenaltiesMissed);
+
+/// <summary>Профиль игрока: шапка и выступления в опубликованных лигах, свежие первыми.</summary>
+public sealed record PublicPlayerPageDto(
+    PublicPlayerDto Player,
+    IReadOnlyList<PublicPlayerCareerRowDto> Career);

@@ -182,7 +182,8 @@ public sealed class PublicReadService(
 
         var players = await GetPlayersAsync(playerIds, cancellationToken);
 
-        var playerNames = players.ToDictionary(player => player.Id, player => player.FullName);
+        // Публично — только «Фамилия Имя»: отчество не показываем нигде на витрине.
+        var playerNames = players.ToDictionary(player => player.Id, player => PlayerDisplayName.ToDisplay(player.FullName));
         var playerPhotos = players.ToDictionary(player => player.Id, player => player.PhotoUrl);
 
         // Часы считаются по полному логу (с паузами), поэтому до фильтрации.
@@ -222,7 +223,9 @@ public sealed class PublicReadService(
                 item.mark?.Period,
                 item.mark?.ElapsedSeconds,
                 item.matchEvent.PlayerId is { } photoPlayerId ? playerPhotos.GetValueOrDefault(photoPlayerId) : null,
-                item.matchEvent.GoalKind?.ToString()))
+                item.matchEvent.GoalKind?.ToString(),
+                item.matchEvent.PlayerId,
+                item.matchEvent.RelatedPlayerId))
             .ToList();
 
         return new PublicMatchPageDto(
@@ -377,7 +380,7 @@ public sealed class PublicReadService(
 
                 return new PublicTeamPlayerDto(
                     registration.PlayerId,
-                    player?.FullName ?? "Игрок",
+                    PlayerDisplayName.ToDisplay(player?.FullName),
                     player?.PhotoUrl,
                     player?.BirthDate,
                     registration.Status.ToString(),
@@ -395,6 +398,109 @@ public sealed class PublicReadService(
             .OrderBy(player => player.Status == nameof(PlayerRegistrationStatus.Active) ? 0 : 1)
             .ThenBy(player => player.FullName, StringComparer.CurrentCulture)
             .ToList();
+    }
+
+    /// <summary>
+    /// Профиль игрока. Игрок общий для всех организаторов, поэтому, как и команда, виден только
+    /// через заявки в опубликованных лигах: без них — 404, даже если игрок есть в справочнике.
+    /// </summary>
+    public async Task<PublicPlayerPageDto> GetPlayerPageAsync(Guid playerId, CancellationToken cancellationToken)
+    {
+        var notFound = new NotFoundException($"Игрок '{playerId}' не найден.");
+
+        var player = (await playerService.GetByIdsAsync([playerId], cancellationToken)).FirstOrDefault()
+            ?? throw notFound;
+        var entries = await rosterService.ListByPlayerAsync(playerId, cancellationToken);
+
+        var published = new Dictionary<Guid, bool>();
+        var teamMatches = new Dictionary<Guid, IReadOnlyList<MatchDto>>();
+        var rows = new List<(PublicPlayerCareerRowDto Row, DateTime LastActivityUtc)>(entries.Count);
+
+        foreach (var entry in entries)
+        {
+            if (!await IsPublishedAsync(entry.TournamentId, published, cancellationToken)) continue;
+
+            // Отзаявили и вернули — несколько заявок за команду; актуальна последняя.
+            var registration = entry.Registrations
+                .Where(item => item.PlayerId == playerId)
+                .OrderBy(item => item.JoinedOn)
+                .Last();
+
+            if (!teamMatches.TryGetValue(entry.TeamId, out var allMatches))
+            {
+                allMatches = await matchService.ListByTeamAsync(entry.TeamId, cancellationToken);
+                teamMatches[entry.TeamId] = allMatches;
+            }
+
+            var divisionMatches = allMatches.Where(match => match.DivisionId == entry.DivisionId).ToList();
+            var played = divisionMatches
+                .Where(match => match.Status is not (MatchStatus.Scheduled or MatchStatus.Cancelled))
+                .ToList();
+
+            // Ссылка на команду ведёт на этап, где она играла последней (как страница команды
+            // выбирает этап по умолчанию), а без матчей — на первый этап дивизиона.
+            var stageId = played.Count > 0
+                ? played.MaxBy(match => match.ScheduledTimeUtc)!.StageId
+                : divisionMatches.FirstOrDefault()?.StageId
+                  ?? (await divisionReader.GetAsync(entry.DivisionId, cancellationToken))?.StageIds.FirstOrDefault();
+            if (stageId is not { } resolvedStageId || resolvedStageId == Guid.Empty) continue;
+
+            var stage = await stagePublicReader.GetAsync(resolvedStageId, cancellationToken);
+            if (stage is null) continue;
+
+            var statistics = (await playerStatisticsService.GetTeamStatisticsAsync(
+                    entry.DivisionId,
+                    entry.TeamId,
+                    divisionMatches.Select(match => match.Id).ToList(),
+                    cancellationToken))
+                .FirstOrDefault(row => row.PlayerId == playerId);
+
+            var lastActivityUtc = played.Count > 0
+                ? played.Max(match => match.ScheduledTimeUtc)
+                : entry.CreatedAtUtc;
+
+            rows.Add((new PublicPlayerCareerRowDto(
+                stage.TournamentId,
+                stage.TournamentName,
+                stage.LeagueName,
+                stage.LeagueSlug,
+                stage.LeagueLogoUrl,
+                entry.DivisionId,
+                DivisionLabel(stage),
+                stage.StageId,
+                entry.TeamId,
+                string.Empty,
+                null,
+                registration.Status.ToString(),
+                registration.JoinedOn,
+                registration.LeftOn,
+                statistics?.Matches ?? 0,
+                statistics?.Goals ?? 0,
+                statistics?.Assists ?? 0,
+                statistics?.OwnGoals ?? 0,
+                statistics?.YellowCards ?? 0,
+                statistics?.RedCards ?? 0,
+                statistics?.PenaltyGoals ?? 0,
+                statistics?.PenaltiesMissed ?? 0), lastActivityUtc));
+        }
+
+        if (rows.Count == 0)
+            throw notFound;
+
+        var teams = await GetTeamsAsync(rows.Select(item => item.Row.TeamId).Distinct().ToList(), cancellationToken);
+
+        return new PublicPlayerPageDto(
+            new PublicPlayerDto(player.Id, PlayerDisplayName.ToDisplay(player.FullName), player.PhotoUrl, player.BirthDate),
+            rows
+                // Свежие выступления первыми; при равенстве — более поздняя заявка.
+                .OrderByDescending(item => item.LastActivityUtc)
+                .ThenByDescending(item => item.Row.JoinedOn)
+                .Select(item =>
+                {
+                    var team = teams.GetValueOrDefault(item.Row.TeamId);
+                    return item.Row with { TeamName = team?.Name ?? "Команда", TeamLogoUrl = team?.LogoUrl };
+                })
+                .ToList());
     }
 
     /// <summary>Лента «сейчас играют» для главного экрана витрины (doc §2.1).</summary>

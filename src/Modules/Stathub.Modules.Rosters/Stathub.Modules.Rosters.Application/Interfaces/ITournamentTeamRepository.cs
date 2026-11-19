@@ -30,6 +30,13 @@ public interface ITournamentTeamRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Заявки команд (с полными составами), в которые игрок когда-либо был заявлен, — только чтение.
+    /// </summary>
+    Task<IReadOnlyList<TournamentTeam>> ListByPlayerAsync(
+        Guid playerId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Заявка команды, за которую игрок сейчас заявлен в турнире. Нужна, чтобы не допустить игрока
     /// в две команды одного турнира (в том числе в разных дивизионах): переход оформляется трансфером.
     /// </summary>

@@ -9,7 +9,12 @@ public sealed record MatchFormatRule
     public bool ExtraTimeEnabled { get; }
     public bool PenaltyShootoutEnabled { get; }
 
-    public MatchFormatRule(int periodDurationMinutes, int periodsCount, bool extraTimeEnabled, bool penaltyShootoutEnabled)
+    /// <summary>Разрешён ли бонусный мяч: гол идёт в счёт за два (и в личную статистику автора и ассистента).</summary>
+    public bool BonusGoalEnabled { get; }
+
+    public MatchFormatRule(int periodDurationMinutes, int periodsCount, bool extraTimeEnabled,
+        bool penaltyShootoutEnabled,
+        bool bonusGoalEnabled = false)
     {
         if (periodDurationMinutes <= 0)
             throw new DomainException("Period duration must be positive.");
@@ -21,5 +26,6 @@ public sealed record MatchFormatRule
         PeriodsCount = periodsCount;
         ExtraTimeEnabled = extraTimeEnabled;
         PenaltyShootoutEnabled = penaltyShootoutEnabled;
+        BonusGoalEnabled = bonusGoalEnabled;
     }
 }

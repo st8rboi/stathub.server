@@ -34,6 +34,9 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<Guid>("AwayTeamId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("BonusGoalEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -130,6 +133,9 @@ namespace Stathub.Modules.Matches.Infrastructure.Migrations
                     b.Property<decimal?>("ExpectedGoals")
                         .HasPrecision(4, 2)
                         .HasColumnType("numeric(4,2)");
+
+                    b.Property<int?>("GoalKind")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("MatchId")
                         .HasColumnType("uuid");

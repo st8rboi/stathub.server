@@ -80,28 +80,44 @@ public sealed class CompetitionEditTests
         var stageId = tournament.Stages.Single().Id;
 
         var stage = tournament.UpdateStage(
-            stageId, "Группа А", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasMatches: false);
+            stageId, "Группа А", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasStartedMatches: false);
 
         Assert.Equal("Группа А", stage.Name);
         Assert.Equal(2, stage.PointsRule.WinPoints);
     }
 
     [Fact]
-    public void UpdateStage_RulesWithMatches_Conflict()
+    public void UpdateStage_RulesWithStartedMatches_Conflict()
     {
         var tournament = CreateTournamentWithStages("Группа");
         var stageId = tournament.Stages.Single().Id;
 
         Assert.Throws<ConflictException>(() => tournament.UpdateStage(
-            stageId, "Группа", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasMatches: true));
+            stageId, "Группа", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasStartedMatches: true));
     }
 
     [Fact]
-    public void UpdateStage_RulesAfterStart_Conflict()
+    public void UpdateStage_RulesAfterStartWithoutStartedMatches_Allowed()
     {
         var tournament = CreateTournamentWithStages("Группа");
         var stageId = tournament.Stages.Single().Id;
         tournament.Start();
+
+        // Календарь составлен, но ни один матч этапа не начат — правила ещё можно поправить.
+        var stage = tournament.UpdateStage(
+            stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true, bonusGoalEnabled: true), null, false);
+
+        Assert.Equal(30, stage.MatchFormatRule.PeriodDurationMinutes);
+        Assert.True(stage.MatchFormatRule.BonusGoalEnabled);
+    }
+
+    [Fact]
+    public void UpdateStage_RulesOfCompletedTournament_Conflict()
+    {
+        var tournament = CreateTournamentWithStages("Группа");
+        var stageId = tournament.Stages.Single().Id;
+        tournament.Start();
+        tournament.Complete();
 
         Assert.Throws<ConflictException>(() => tournament.UpdateStage(
             stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true), null, false));

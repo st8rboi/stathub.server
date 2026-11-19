@@ -16,6 +16,7 @@ namespace Stathub.WebApi.Contracts.Matches;
 /// <param name="ClientTimestampUtc">Момент события по часам устройства судьи</param>
 /// <param name="SequenceNumber">Порядок события внутри матча (назначает клиент)</param>
 /// <param name="ExpectedGoals">xG удара (опасность момента, 0–1) — только для Shot/ShotOnTarget</param>
+/// <param name="GoalKind">Вид гола (Regular/Penalty/Bonus) — только для Goal; не указан — гол с игры</param>
 public sealed record AppendMatchEventRequest(
     Guid Id,
     MatchEventType Type,
@@ -26,4 +27,5 @@ public sealed record AppendMatchEventRequest(
     string? Reason,
     DateTime ClientTimestampUtc,
     long SequenceNumber,
-    decimal? ExpectedGoals = null);
+    decimal? ExpectedGoals = null,
+    GoalKind? GoalKind = null);

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Stathub.Modules.Matches.Application.Dtos;
 using Stathub.Modules.Matches.Application.Enums;
 using Stathub.Modules.Matches.Application.Interfaces;
+using Stathub.Modules.Matches.Domain.Entities;
 using Stathub.Modules.Matches.Domain.Enums;
 using Stathub.Modules.Matches.Infrastructure.Persistence;
 
@@ -18,7 +19,8 @@ internal sealed class TournamentPlayerEventReader(MatchesDbContext dbContext) : 
         [MatchEventType.Goal] = TournamentPlayerEventKind.Goal,
         [MatchEventType.OwnGoal] = TournamentPlayerEventKind.OwnGoal,
         [MatchEventType.YellowCard] = TournamentPlayerEventKind.YellowCard,
-        [MatchEventType.RedCard] = TournamentPlayerEventKind.RedCard
+        [MatchEventType.RedCard] = TournamentPlayerEventKind.RedCard,
+        [MatchEventType.PenaltyMissed] = TournamentPlayerEventKind.PenaltyMissed
     };
 
     public async Task<IReadOnlyList<TournamentPlayerEventDto>> GetByDivisionAsync(
@@ -37,7 +39,8 @@ internal sealed class TournamentPlayerEventReader(MatchesDbContext dbContext) : 
                 matchEvent.PlayerId,
                 matchEvent.RelatedPlayerId,
                 matchEvent.TeamId,
-                matchEvent.TargetEventId
+                matchEvent.TargetEventId,
+                matchEvent.GoalKind
             })
             .ToListAsync(cancellationToken);
 
@@ -55,7 +58,9 @@ internal sealed class TournamentPlayerEventReader(MatchesDbContext dbContext) : 
                 matchEvent.PlayerId,
                 matchEvent.TeamId,
                 matchEvent.RelatedPlayerId,
-                KindMap[matchEvent.Type]))
+                KindMap[matchEvent.Type],
+                MatchEvent.GoalValue(matchEvent.GoalKind),
+                matchEvent.GoalKind == GoalKind.Penalty))
             .ToList();
     }
 }

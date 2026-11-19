@@ -25,6 +25,7 @@ public sealed record MatchDto(
     int PeriodDurationMinutes,
     bool ExtraTimeEnabled,
     bool PenaltyShootoutEnabled,
+    bool BonusGoalEnabled,
     // Текущий период: 0 — матч ещё не начат
     int CurrentPeriod,
     DateTime? PeriodStartedAtUtc,
@@ -55,6 +56,7 @@ public sealed record MatchDto(
         match.PeriodDurationMinutes,
         match.ExtraTimeEnabled,
         match.PenaltyShootoutEnabled,
+        match.BonusGoalEnabled,
         match.CurrentPeriod,
         match.PeriodStartedAtUtc,
         match.PausedAtUtc,

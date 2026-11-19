@@ -77,7 +77,9 @@ public sealed class PlayerStatisticsService(
                     entry.Assists,
                     entry.OwnGoals,
                     entry.YellowCards,
-                    entry.RedCards);
+                    entry.RedCards,
+                    entry.PenaltyGoals,
+                    entry.PenaltiesMissed);
             })
             .ToList();
     }

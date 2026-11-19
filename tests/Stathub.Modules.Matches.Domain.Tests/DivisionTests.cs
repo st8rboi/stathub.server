@@ -133,7 +133,7 @@ public sealed class DivisionTests
         var stage = AddRound(tournament, tournament.Divisions.Single().Id);
         tournament.Start();
 
-        tournament.UpdateStage(stage.Id, stage.Name, StageFormatType.Round, Points, Format, 2, stageHasMatches: true);
+        tournament.UpdateStage(stage.Id, stage.Name, StageFormatType.Round, Points, Format, 2, stageHasStartedMatches: true);
 
         Assert.Equal(2, stage.QualifiersCount);
     }
@@ -166,7 +166,7 @@ public sealed class DivisionTests
         Assert.Throws<DomainException>(() =>
             tournament.AddStageGroup(playoff.Id, "Группа A", [Beta], stageHasMatches: false));
         Assert.Throws<DomainException>(() => tournament.UpdateStage(
-            round.Id, round.Name, StageFormatType.Playoff, Points, Format, null, stageHasMatches: false));
+            round.Id, round.Name, StageFormatType.Playoff, Points, Format, null, stageHasStartedMatches: false));
     }
 
     [Fact]

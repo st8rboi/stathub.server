@@ -11,7 +11,8 @@ public sealed class TournamentService(
     ITournamentRepository repository,
     ILeagueRepository leagueRepository,
     IEnumerable<ICompetitionUsageSource> usageSources,
-    IEnumerable<IDivisionTeamSource> divisionTeamSources)
+    IEnumerable<IDivisionTeamSource> divisionTeamSources,
+    IEnumerable<IStageRulesSubscriber> stageRulesSubscribers)
 {
     public async Task<Guid> CreateTournamentAsync(
         Guid leagueId,
@@ -61,13 +62,15 @@ public sealed class TournamentService(
         int periodsCount,
         bool extraTimeEnabled,
         bool penaltyShootoutEnabled,
+        bool bonusGoalEnabled,
         int? qualifiersCount,
         CancellationToken cancellationToken = default)
     {
         var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
 
         var pointsRule = new PointsRule(winPoints, drawPoints, lossPoints);
-        var matchFormatRule = new MatchFormatRule(periodDurationMinutes, periodsCount, extraTimeEnabled, penaltyShootoutEnabled);
+        var matchFormatRule = new MatchFormatRule(
+            periodDurationMinutes, periodsCount, extraTimeEnabled, penaltyShootoutEnabled, bonusGoalEnabled);
 
         var stage = tournament.AddStage(
             ResolveDivisionId(tournament, divisionId),
@@ -134,19 +137,26 @@ public sealed class TournamentService(
         int periodsCount,
         bool extraTimeEnabled,
         bool penaltyShootoutEnabled,
+        bool bonusGoalEnabled,
         int? qualifiersCount,
         CancellationToken cancellationToken = default)
     {
         var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
 
         var pointsRule = new PointsRule(winPoints, drawPoints, lossPoints);
-        var matchFormatRule = new MatchFormatRule(periodDurationMinutes, periodsCount, extraTimeEnabled, penaltyShootoutEnabled);
+        var matchFormatRule = new MatchFormatRule(
+            periodDurationMinutes, periodsCount, extraTimeEnabled, penaltyShootoutEnabled, bonusGoalEnabled);
 
-        var hasMatches = await StageHasMatchesAsync(stageId, cancellationToken);
+        var hasStartedMatches = await StageHasStartedMatchesAsync(stageId, cancellationToken);
 
         var stage = tournament.UpdateStage(
-            stageId, name, formatType, pointsRule, matchFormatRule, qualifiersCount, hasMatches);
+            stageId, name, formatType, pointsRule, matchFormatRule, qualifiersCount, hasStartedMatches);
         await repository.SaveChangesAsync(cancellationToken);
+
+        // Не начатые матчи этапа хранят копию регламента — переносим в них новые правила.
+        // Отдельная транзакция другого модуля: при сбое повторное сохранение этапа догонит матчи.
+        foreach (var subscriber in stageRulesSubscribers)
+            await subscriber.ApplyStageRulesAsync(stageId, cancellationToken);
 
         return StageDto.From(stage);
     }
@@ -324,6 +334,17 @@ public sealed class TournamentService(
             return tournament.Divisions.Single().Id;
 
         throw new DomainException("В турнире несколько дивизионов: укажите, в какой добавить этап.");
+    }
+
+    private async Task<bool> StageHasStartedMatchesAsync(Guid stageId, CancellationToken cancellationToken)
+    {
+        foreach (var source in usageSources)
+        {
+            if (await source.StageHasStartedMatchesAsync(stageId, cancellationToken))
+                return true;
+        }
+
+        return false;
     }
 
     private async Task<bool> StageHasMatchesAsync(Guid stageId, CancellationToken cancellationToken)

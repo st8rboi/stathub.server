@@ -104,6 +104,7 @@ public sealed record PublicMatchDto(
 /// Событие протокола для витрины. <see cref="Period"/> и <see cref="ElapsedSeconds"/> — игровое
 /// время без пауз (null у событий жизненного цикла); <see cref="TargetEventId"/> — у отмены.
 /// <see cref="PlayerPhotoUrl"/> — фото игрока для плашек трансляционного оверлея.
+/// <see cref="GoalKind"/> — вид гола (Regular/Penalty/Bonus), только у голов.
 /// </summary>
 public sealed record PublicEventDto(
     Guid Id,
@@ -118,7 +119,8 @@ public sealed record PublicEventDto(
     Guid? TargetEventId,
     int? Period,
     int? ElapsedSeconds,
-    string? PlayerPhotoUrl);
+    string? PlayerPhotoUrl,
+    string? GoalKind);
 
 /// <summary>
 /// Страница матча. <see cref="Statistics"/> — командная статистика от статистика;
@@ -167,7 +169,9 @@ public sealed record PublicPlayerStatisticsRowDto(
     int Assists,
     int OwnGoals,
     int YellowCards,
-    int RedCards)
+    int RedCards,
+    int PenaltyGoals,
+    int PenaltiesMissed)
 {
     public static PublicPlayerStatisticsRowDto From(PlayerStatisticsRowDto row, string? photoUrl) => new(
         row.PlayerId,
@@ -181,7 +185,9 @@ public sealed record PublicPlayerStatisticsRowDto(
         row.Assists,
         row.OwnGoals,
         row.YellowCards,
-        row.RedCards);
+        row.RedCards,
+        row.PenaltyGoals,
+        row.PenaltiesMissed);
 }
 
 /// <summary>
@@ -236,7 +242,9 @@ public sealed record PublicTeamPlayerDto(
     int Assists,
     int OwnGoals,
     int YellowCards,
-    int RedCards);
+    int RedCards,
+    int PenaltyGoals,
+    int PenaltiesMissed);
 
 /// <summary>
 /// Страница команды: участия во всех опубликованных этапах и подробности по выбранному

@@ -65,6 +65,7 @@ public sealed class TournamentsController(TournamentService tournamentService) :
             request.PeriodsCount,
             request.ExtraTimeEnabled,
             request.PenaltyShootoutEnabled,
+            request.BonusGoalEnabled,
             request.QualifiersCount,
             cancellationToken);
 
@@ -109,6 +110,7 @@ public sealed class TournamentsController(TournamentService tournamentService) :
             request.PeriodsCount,
             request.ExtraTimeEnabled,
             request.PenaltyShootoutEnabled,
+            request.BonusGoalEnabled,
             request.QualifiersCount,
             cancellationToken));
 

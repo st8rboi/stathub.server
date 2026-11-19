@@ -211,5 +211,6 @@ public sealed class MatchesController(
         request.Reason,
         request.ClientTimestampUtc,
         request.SequenceNumber,
-        request.ExpectedGoals);
+        request.ExpectedGoals,
+        request.GoalKind);
 }

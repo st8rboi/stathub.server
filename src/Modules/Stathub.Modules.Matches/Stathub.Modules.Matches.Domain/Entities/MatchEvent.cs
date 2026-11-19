@@ -66,6 +66,18 @@ public sealed class MatchEvent : Entity
     /// </summary>
     public decimal? ExpectedGoals { get; private set; }
 
+    /// <summary>
+    /// Вид гола: с игры, с пенальти, бонусный. Заполняется только у <see cref="MatchEventType.Goal"/>;
+    /// у голов, принятых до появления видов, пусто — это обычный гол.
+    /// </summary>
+    public GoalKind? GoalKind { get; private set; }
+
+    /// <summary>Сколько гол добавляет к счёту команды: бонусный мяч — два, остальные — один.</summary>
+    public int ScoreValue => GoalValue(GoalKind);
+
+    /// <summary>Вес гола в счёте и в личной статистике автора и ассистента.</summary>
+    public static int GoalValue(GoalKind? goalKind) => goalKind == Enums.GoalKind.Bonus ? 2 : 1;
+
     /// <summary>Порядковый номер события внутри матча, назначается клиентом.</summary>
     public long SequenceNumber { get; private set; }
 
@@ -88,7 +100,8 @@ public sealed class MatchEvent : Entity
         DateTime clientTimestampUtc,
         DateTime occurredAtUtc,
         long sequenceNumber,
-        decimal? expectedGoals)
+        decimal? expectedGoals,
+        GoalKind? goalKind)
     {
         Id = id;
         MatchId = matchId;
@@ -102,6 +115,7 @@ public sealed class MatchEvent : Entity
         OccurredAtUtc = occurredAtUtc;
         SequenceNumber = sequenceNumber;
         ExpectedGoals = expectedGoals;
+        GoalKind = goalKind;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
@@ -117,7 +131,8 @@ public sealed class MatchEvent : Entity
         DateTime clientTimestampUtc,
         long sequenceNumber,
         DateTime? occurredAtUtc = null,
-        decimal? expectedGoals = null)
+        decimal? expectedGoals = null,
+        GoalKind? goalKind = null)
     {
         if (id == Guid.Empty)
             throw new DomainException("Событие должно иметь идентификатор, сгенерированный клиентом (UUID).");
@@ -130,6 +145,7 @@ public sealed class MatchEvent : Entity
 
         ValidateTypeRules(type, id, teamId, playerId, relatedPlayerId, targetEventId);
         var normalizedExpectedGoals = NormalizeExpectedGoals(type, expectedGoals);
+        var normalizedGoalKind = NormalizeGoalKind(type, goalKind, relatedPlayerId);
 
         var normalizedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         if (normalizedReason is { Length: > ReasonMaxLength })
@@ -147,7 +163,8 @@ public sealed class MatchEvent : Entity
             clientTimestampUtc,
             occurredAtUtc ?? clientTimestampUtc,
             sequenceNumber,
-            normalizedExpectedGoals);
+            normalizedExpectedGoals,
+            normalizedGoalKind);
     }
 
     public static bool IsShotType(MatchEventType type) => type is MatchEventType.Shot or MatchEventType.ShotOnTarget;
@@ -171,6 +188,29 @@ public sealed class MatchEvent : Entity
             throw new DomainException("xG удара должен быть больше 0 и не больше 1.");
 
         return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
+    /// Вид гола есть только у <see cref="MatchEventType.Goal"/>: если клиент его не прислал, это гол с игры.
+    /// Автогол засчитывается сопернику и вида не имеет; у пенальти не бывает ассистента.
+    /// Разрешён ли бонусный мяч в этом матче, проверяет <see cref="Match.EnsureCanAccept"/>.
+    /// </summary>
+    private static GoalKind? NormalizeGoalKind(MatchEventType type, GoalKind? goalKind, Guid? relatedPlayerId)
+    {
+        if (type != MatchEventType.Goal)
+        {
+            if (goalKind is not null)
+                throw new DomainException("Вид гола указывается только у гола.");
+            return null;
+        }
+
+        var kind = goalKind ?? Enums.GoalKind.Regular;
+        if (!Enum.IsDefined(kind))
+            throw new DomainException($"Неизвестный вид гола '{kind}'.");
+        if (kind == Enums.GoalKind.Penalty && relatedPlayerId is not null)
+            throw new DomainException("У гола с пенальти не бывает ассистента.");
+
+        return kind;
     }
 
     public bool IsLifecycle => Type is MatchEventType.MatchStarted
@@ -210,6 +250,14 @@ public sealed class MatchEvent : Entity
                     throw new DomainException("Гол должен быть привязан к команде.");
                 if (playerId is not null && playerId == relatedPlayerId)
                     throw new DomainException("Ассистент не может совпадать с автором гола.");
+                break;
+
+            case MatchEventType.PenaltyMissed:
+                if (teamId is null)
+                    throw new DomainException("Нереализованный пенальти должен быть привязан к команде бьющего.");
+                // Вратарь — игрок соперника: в событии команды бьющего ему не место.
+                if (relatedPlayerId is not null)
+                    throw new DomainException("У нереализованного пенальти указывается только бьющий.");
                 break;
 
             case MatchEventType.YellowCard:

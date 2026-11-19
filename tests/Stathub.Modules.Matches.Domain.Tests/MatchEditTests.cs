@@ -58,6 +58,35 @@ public sealed class MatchEditTests
     }
 
     [Fact]
+    public void ApplyFormat_ScheduledWithoutEvents_ReplacesRules()
+    {
+        var match = CreateMatch();
+
+        match.ApplyFormat(
+            MatchFormat.Create(periodsCount: 2, periodDurationMinutes: 30, extraTimeEnabled: true, penaltyShootoutEnabled: true, bonusGoalEnabled: true),
+            hasEvents: false);
+
+        Assert.Equal(30, match.PeriodDurationMinutes);
+        Assert.True(match.ExtraTimeEnabled);
+        Assert.True(match.PenaltyShootoutEnabled);
+        Assert.True(match.BonusGoalEnabled);
+    }
+
+    [Fact]
+    public void ApplyFormat_StartedOrWithEvents_Conflict()
+    {
+        var format = MatchFormat.Create(periodsCount: 2, periodDurationMinutes: 30, extraTimeEnabled: false, penaltyShootoutEnabled: false);
+
+        var withEvents = CreateMatch();
+        Assert.Throws<ConflictException>(() => withEvents.ApplyFormat(format, hasEvents: true));
+
+        var started = CreateMatch();
+        started.Start(Kickoff);
+        Assert.Throws<ConflictException>(() => started.ApplyFormat(format, hasEvents: false));
+        Assert.Equal(45, started.PeriodDurationMinutes);
+    }
+
+    [Fact]
     public void Update_StartedMatch_Conflict()
     {
         var match = CreateMatch();

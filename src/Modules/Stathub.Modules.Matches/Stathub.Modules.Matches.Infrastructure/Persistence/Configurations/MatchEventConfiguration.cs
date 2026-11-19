@@ -30,6 +30,9 @@ internal sealed class MatchEventConfiguration : IEntityTypeConfiguration<MatchEv
         // xG удара: 0.01–1.00, сотых достаточно.
         builder.Property(matchEvent => matchEvent.ExpectedGoals).HasPrecision(4, 2);
 
+        // Вид гола: только у голов, у старых событий пусто (= гол с игры).
+        builder.Property(matchEvent => matchEvent.GoalKind);
+
         builder.Property(matchEvent => matchEvent.ClientTimestampUtc).IsRequired();
         builder.Property(matchEvent => matchEvent.OccurredAtUtc);
         builder.Property(matchEvent => matchEvent.SequenceNumber).IsRequired();

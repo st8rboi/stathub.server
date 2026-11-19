@@ -10,7 +10,7 @@ namespace Stathub.Modules.Statistics.Domain;
 /// <para>
 /// События без игрока (гол «без автора», карточка команды) в личную статистику автора не попадают,
 /// но ассистент гола учитывается, даже если автор не указан. Отменённые события отфильтрованы
-/// до расчёта.
+/// до расчёта. Бонусный мяч приносит автору и ассистенту по два (вес события).
 /// </para>
 /// </summary>
 public static class PlayerStatisticsCalculator
@@ -22,13 +22,13 @@ public static class PlayerStatisticsCalculator
         foreach (var matchEvent in events)
         {
             if (matchEvent.PlayerId is { } playerId)
-                Accumulate(accumulators, playerId, matchEvent).Apply(matchEvent.Kind);
+                Accumulate(accumulators, playerId, matchEvent).Apply(matchEvent.Kind, matchEvent.Value, matchEvent.IsPenalty);
 
             // Ассистент — второй игрок гола; засчитываем его данным автора передачи.
             if (matchEvent.Kind == PlayerEventKind.Goal && matchEvent.RelatedPlayerId is { } assistId
                 && assistId != matchEvent.PlayerId)
             {
-                Accumulate(accumulators, assistId, matchEvent).Apply(PlayerEventKind.Assist);
+                Accumulate(accumulators, assistId, matchEvent).Apply(PlayerEventKind.Assist, matchEvent.Value);
             }
         }
 
@@ -41,7 +41,9 @@ public static class PlayerStatisticsCalculator
                 pair.Value.Assists,
                 pair.Value.YellowCards,
                 pair.Value.RedCards,
-                pair.Value.MatchIds.Count))
+                pair.Value.MatchIds.Count,
+                pair.Value.PenaltyGoals,
+                pair.Value.PenaltiesMissed))
             // Порядок детерминирован: сначала голы, затем передачи, затем матчи и Id.
             .OrderByDescending(entry => entry.Goals)
             .ThenByDescending(entry => entry.Assists)
@@ -89,19 +91,26 @@ public static class PlayerStatisticsCalculator
         public int Assists { get; private set; }
         public int YellowCards { get; private set; }
         public int RedCards { get; private set; }
+        public int PenaltyGoals { get; private set; }
+        public int PenaltiesMissed { get; private set; }
 
-        public void Apply(PlayerEventKind kind)
+        public void Apply(PlayerEventKind kind, int value = 1, bool isPenalty = false)
         {
             switch (kind)
             {
                 case PlayerEventKind.Goal:
-                    Goals++;
+                    Goals += value;
+                    if (isPenalty)
+                        PenaltyGoals++;
                     break;
                 case PlayerEventKind.OwnGoal:
                     OwnGoals++;
                     break;
                 case PlayerEventKind.Assist:
-                    Assists++;
+                    Assists += value;
+                    break;
+                case PlayerEventKind.PenaltyMissed:
+                    PenaltiesMissed++;
                     break;
                 case PlayerEventKind.YellowCard:
                     YellowCards++;

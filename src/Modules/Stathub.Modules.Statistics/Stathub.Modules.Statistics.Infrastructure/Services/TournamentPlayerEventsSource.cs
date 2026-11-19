@@ -22,7 +22,9 @@ public sealed class TournamentPlayerEventsSource(ITournamentPlayerEventReader re
                 matchEvent.PlayerId,
                 matchEvent.TeamId,
                 matchEvent.RelatedPlayerId,
-                ToDomainKind(matchEvent.Kind)))
+                ToDomainKind(matchEvent.Kind),
+                matchEvent.Value,
+                matchEvent.IsPenalty))
             .ToList();
     }
 
@@ -32,6 +34,7 @@ public sealed class TournamentPlayerEventsSource(ITournamentPlayerEventReader re
         TournamentPlayerEventKind.OwnGoal => PlayerEventKind.OwnGoal,
         TournamentPlayerEventKind.YellowCard => PlayerEventKind.YellowCard,
         TournamentPlayerEventKind.RedCard => PlayerEventKind.RedCard,
+        TournamentPlayerEventKind.PenaltyMissed => PlayerEventKind.PenaltyMissed,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Неизвестный тип события турнира.")
     };
 }

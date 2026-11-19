@@ -12,6 +12,7 @@ public sealed record MatchFormatDto(
     int PeriodDurationMinutes,
     bool ExtraTimeEnabled,
     bool PenaltyShootoutEnabled,
+    bool BonusGoalEnabled,
     IReadOnlyList<MatchGroupDto> Groups);
 
 /// <summary>Группа этапа и её команды.</summary>

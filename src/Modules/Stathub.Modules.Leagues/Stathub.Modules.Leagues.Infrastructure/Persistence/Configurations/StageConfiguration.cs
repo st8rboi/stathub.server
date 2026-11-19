@@ -33,6 +33,7 @@ internal sealed class StageConfiguration : IEntityTypeConfiguration<Stage>
             rule.Property(r => r.PeriodsCount).HasColumnName("periods_count").IsRequired();
             rule.Property(r => r.ExtraTimeEnabled).HasColumnName("extra_time_enabled").IsRequired();
             rule.Property(r => r.PenaltyShootoutEnabled).HasColumnName("penalty_shootout_enabled").IsRequired();
+            rule.Property(r => r.BonusGoalEnabled).HasColumnName("bonus_goal_enabled").IsRequired();
         });
 
         builder.Navigation(s => s.PointsRule).IsRequired();

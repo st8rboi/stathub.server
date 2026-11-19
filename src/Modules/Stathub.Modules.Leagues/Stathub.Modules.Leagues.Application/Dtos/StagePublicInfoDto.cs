@@ -8,6 +8,7 @@ namespace Stathub.Modules.Leagues.Application.Dtos;
 /// Сколько дивизионов в турнире: при одном интерфейс уровень дивизиона не показывает.
 /// </param>
 /// <param name="QualifiersCount">Сколько первых команд выходит дальше (при группах — из каждой).</param>
+/// <param name="EliminatedCount">Сколько последних команд вылетает (при группах — из каждой).</param>
 public sealed record StagePublicInfoDto(
     Guid StageId,
     string StageName,
@@ -28,4 +29,5 @@ public sealed record StagePublicInfoDto(
     int DivisionOrder,
     int DivisionsCount,
     int? QualifiersCount,
+    int? EliminatedCount,
     IReadOnlyList<StageGroupTeamsDto> Groups);

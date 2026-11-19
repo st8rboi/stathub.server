@@ -4,9 +4,10 @@ namespace Stathub.Modules.Standings.Domain.Models;
 
 /// <summary>
 /// Правила подсчёта: очки за победу/ничью/поражение (PointsRule этапа), порядок тай-брейков,
-/// а также разбиение этапа на группы и число команд, выходящих дальше.
+/// а также разбиение этапа на группы и зоны выхода дальше и вылета.
 /// </summary>
 /// <param name="QualifiersCount">Сколько первых команд выходит дальше (при группах — из каждой); null — никто.</param>
+/// <param name="EliminatedCount">Сколько последних команд вылетает (при группах — из каждой); null — никто.</param>
 /// <param name="Groups">Группы этапа; пусто или null — одна общая таблица.</param>
 /// <param name="TeamIds">
 /// Участники общей таблицы (без групп): попадают в неё с нулями ещё до первого матча.
@@ -18,7 +19,8 @@ public sealed record StandingsRules(
     IReadOnlyList<StandingsTiebreaker> Tiebreakers,
     int? QualifiersCount = null,
     IReadOnlyList<StandingsGroup>? Groups = null,
-    IReadOnlyList<Guid>? TeamIds = null)
+    IReadOnlyList<Guid>? TeamIds = null,
+    int? EliminatedCount = null)
 {
     public static StandingsRules Default { get; } = new(
         WinPoints: 3,

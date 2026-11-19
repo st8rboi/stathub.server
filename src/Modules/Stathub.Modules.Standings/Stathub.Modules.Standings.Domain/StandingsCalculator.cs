@@ -22,9 +22,13 @@ public static class StandingsCalculator
         ArgumentNullException.ThrowIfNull(rules);
 
         var qualifiers = Math.Max(rules.QualifiersCount ?? 0, 0);
+        var eliminated = Math.Max(rules.EliminatedCount ?? 0, 0);
 
         if (rules.Groups is not { Count: > 0 } groups)
-            return [new StandingsTable(null, null, Calculate(matches, rules, rules.TeamIds ?? []), qualifiers)];
+            return
+            [
+                new StandingsTable(null, null, Calculate(matches, rules, rules.TeamIds ?? []), qualifiers, eliminated),
+            ];
 
         return groups
             .OrderBy(group => group.Order)
@@ -35,7 +39,8 @@ public static class StandingsCalculator
                     group.Id,
                     group.Name,
                     Calculate(groupMatches, rules, group.TeamIds),
-                    qualifiers);
+                    qualifiers,
+                    eliminated);
             })
             .ToList();
     }

@@ -48,7 +48,8 @@ public sealed class StandingsService(
                     item.table.GroupName ?? string.Empty,
                     item.rows))
                 .ToList(),
-            rules.QualifiersCount);
+            rules.QualifiersCount,
+            rules.EliminatedCount);
     }
 
     private static List<StandingsRowDto> ToRows(
@@ -73,7 +74,8 @@ public sealed class StandingsService(
                     entry.GoalDifference,
                     entry.Points,
                     position,
-                    table.Qualifies(position));
+                    table.Qualifies(position),
+                    table.Eliminated(position));
             })
             .ToList();
 }

@@ -47,6 +47,7 @@ internal sealed class StagePublicReader(
             division.Order,
             tournament.Divisions.Count,
             stage.QualifiersCount,
+            stage.EliminatedCount,
             stage.Groups
                 .OrderBy(group => group.Order)
                 .Select(group => new StageGroupTeamsDto(group.Id, group.Name, group.Order, group.TeamIds.ToList()))

@@ -133,9 +133,34 @@ public sealed class DivisionTests
         var stage = AddRound(tournament, tournament.Divisions.Single().Id);
         tournament.Start();
 
-        tournament.UpdateStage(stage.Id, stage.Name, StageFormatType.Round, Points, Format, 2, stageHasStartedMatches: true);
+        tournament.UpdateStage(
+            stage.Id,
+            stage.Name,
+            StageFormatType.Round,
+            Points,
+            Format,
+            qualifiersCount: 2,
+            eliminatedCount: 1,
+            stageHasStartedMatches: true);
 
         Assert.Equal(2, stage.QualifiersCount);
+        Assert.Equal(1, stage.EliminatedCount);
+    }
+
+    [Fact]
+    public void Eliminated_OnlyForRoundStage_AndPositive()
+    {
+        var tournament = CreateTournament();
+        var divisionId = tournament.Divisions.Single().Id;
+
+        Assert.Equal(
+            2,
+            tournament.AddStage(divisionId, "Круг", StageFormatType.Round, Points, Format, eliminatedCount: 2)
+                .EliminatedCount);
+        Assert.Throws<DomainException>(() =>
+            tournament.AddStage(divisionId, "Круг 2", StageFormatType.Round, Points, Format, eliminatedCount: 0));
+        Assert.Throws<DomainException>(() =>
+            tournament.AddStage(divisionId, "Плей-офф", StageFormatType.Playoff, Points, Format, eliminatedCount: 1));
     }
 
     [Fact]
@@ -166,7 +191,7 @@ public sealed class DivisionTests
         Assert.Throws<DomainException>(() =>
             tournament.AddStageGroup(playoff.Id, "Группа A", [Beta], stageHasMatches: false));
         Assert.Throws<DomainException>(() => tournament.UpdateStage(
-            round.Id, round.Name, StageFormatType.Playoff, Points, Format, null, stageHasStartedMatches: false));
+            round.Id, round.Name, StageFormatType.Playoff, Points, Format, null, null, stageHasStartedMatches: false));
     }
 
     [Fact]
@@ -254,5 +279,52 @@ public sealed class DivisionTests
 
         Assert.Null(table.GroupId);
         Assert.False(table.Qualifies(1));
+        Assert.False(table.Eliminated(2));
+    }
+
+    [Fact]
+    public void Standings_EliminationZone_LastPlacesOfEachGroup()
+    {
+        var groupA = Guid.NewGuid();
+        var groupB = Guid.NewGuid();
+        var rules = new StandingsRules(
+            WinPoints: 3,
+            DrawPoints: 1,
+            LossPoints: 0,
+            Tiebreakers: [StandingsTiebreaker.GoalDifference],
+            QualifiersCount: 1,
+            Groups:
+            [
+                new StandingsGroup(groupA, "Группа A", 1, [Alpha, Beta]),
+                new StandingsGroup(groupB, "Группа B", 2, [Gamma, Delta])
+            ],
+            EliminatedCount: 1);
+
+        var tables = StandingsCalculator.CalculateTables([new StandingsMatch(Alpha, Beta, 0, 2, groupA)], rules);
+
+        Assert.All(tables, table =>
+        {
+            Assert.False(table.Eliminated(1));
+            Assert.True(table.Eliminated(2));
+        });
+    }
+
+    [Fact]
+    public void Standings_OverlappingZones_QualificationWins()
+    {
+        var rules = new StandingsRules(
+            WinPoints: 3,
+            DrawPoints: 1,
+            LossPoints: 0,
+            Tiebreakers: [StandingsTiebreaker.GoalDifference],
+            QualifiersCount: 2,
+            TeamIds: [Alpha, Beta, Gamma],
+            EliminatedCount: 2);
+
+        var table = Assert.Single(StandingsCalculator.CalculateTables([], rules));
+
+        Assert.True(table.Qualifies(2));
+        Assert.False(table.Eliminated(2));
+        Assert.True(table.Eliminated(3));
     }
 }

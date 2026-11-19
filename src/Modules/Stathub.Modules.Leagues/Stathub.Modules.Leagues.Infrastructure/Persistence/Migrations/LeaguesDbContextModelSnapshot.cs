@@ -107,6 +107,9 @@ namespace Stathub.Modules.Leagues.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("DivisionId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("EliminatedCount")
+                        .HasColumnType("integer");
+
                     b.Property<int>("FormatType")
                         .HasColumnType("integer");
 

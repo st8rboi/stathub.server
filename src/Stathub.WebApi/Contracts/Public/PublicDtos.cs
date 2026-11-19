@@ -64,7 +64,9 @@ public sealed record PublicStageDto(
     // Сколько дивизионов в турнире: при одном уровень дивизиона на витрине скрыт.
     int DivisionsCount,
     // Сколько первых команд выходит дальше (при группах — из каждой); null — никто.
-    int? QualifiersCount);
+    int? QualifiersCount,
+    // Сколько последних команд вылетает (при группах — из каждой); null — никто.
+    int? EliminatedCount);
 
 /// <summary>День с матчами в часовом поясе зрителя — вкладка полосы дат на главной.</summary>
 public sealed record PublicMatchDayDto(DateOnly Date, int Count);

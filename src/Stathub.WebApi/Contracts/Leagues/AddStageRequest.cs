@@ -9,6 +9,9 @@ namespace Stathub.WebApi.Contracts.Leagues;
 /// <param name="QualifiersCount">
 /// Сколько первых команд выходит в следующий этап (при группах — из каждой группы); только у кругового этапа.
 /// </param>
+/// <param name="EliminatedCount">
+/// Сколько последних команд вылетает (при группах — из каждой группы); только у кругового этапа.
+/// </param>
 /// <param name="BonusGoalEnabled">Разрешён ли бонусный мяч (гол идёт в счёт и в статистику за два).</param>
 public sealed record AddStageRequest(
     string Name,
@@ -22,4 +25,5 @@ public sealed record AddStageRequest(
     bool PenaltyShootoutEnabled,
     Guid? DivisionId = null,
     int? QualifiersCount = null,
-    bool BonusGoalEnabled = false);
+    bool BonusGoalEnabled = false,
+    int? EliminatedCount = null);

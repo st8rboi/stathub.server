@@ -80,7 +80,7 @@ public sealed class CompetitionEditTests
         var stageId = tournament.Stages.Single().Id;
 
         var stage = tournament.UpdateStage(
-            stageId, "Группа А", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasStartedMatches: false);
+            stageId, "Группа А", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, null, stageHasStartedMatches: false);
 
         Assert.Equal("Группа А", stage.Name);
         Assert.Equal(2, stage.PointsRule.WinPoints);
@@ -93,7 +93,7 @@ public sealed class CompetitionEditTests
         var stageId = tournament.Stages.Single().Id;
 
         Assert.Throws<ConflictException>(() => tournament.UpdateStage(
-            stageId, "Группа", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, stageHasStartedMatches: true));
+            stageId, "Группа", StageFormatType.Round, new PointsRule(2, 1, 0), Format, null, null, stageHasStartedMatches: true));
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class CompetitionEditTests
 
         // Календарь составлен, но ни один матч этапа не начат — правила ещё можно поправить.
         var stage = tournament.UpdateStage(
-            stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true, bonusGoalEnabled: true), null, false);
+            stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true, bonusGoalEnabled: true), null, null, false);
 
         Assert.Equal(30, stage.MatchFormatRule.PeriodDurationMinutes);
         Assert.True(stage.MatchFormatRule.BonusGoalEnabled);
@@ -120,7 +120,7 @@ public sealed class CompetitionEditTests
         tournament.Complete();
 
         Assert.Throws<ConflictException>(() => tournament.UpdateStage(
-            stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true), null, false));
+            stageId, "Группа", StageFormatType.Round, Points, new MatchFormatRule(30, 2, false, true), null, null, false));
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class CompetitionEditTests
         tournament.Start();
 
         var stage = tournament.UpdateStage(
-            stageId, "Группа А", StageFormatType.Round, new PointsRule(3, 1, 0), new MatchFormatRule(25, 2, false, true), null, true);
+            stageId, "Группа А", StageFormatType.Round, new PointsRule(3, 1, 0), new MatchFormatRule(25, 2, false, true), null, null, true);
 
         Assert.Equal("Группа А", stage.Name);
     }

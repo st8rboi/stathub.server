@@ -98,6 +98,7 @@ public sealed record StageDto(
     bool PenaltyShootoutEnabled,
     bool BonusGoalEnabled,
     int? QualifiersCount,
+    int? EliminatedCount,
     IReadOnlyList<StageGroupDto> Groups)
 {
     internal static StageDto From(Stage stage) => new(
@@ -115,5 +116,6 @@ public sealed record StageDto(
         stage.MatchFormatRule.PenaltyShootoutEnabled,
         stage.MatchFormatRule.BonusGoalEnabled,
         stage.QualifiersCount,
+        stage.EliminatedCount,
         stage.Groups.OrderBy(group => group.Order).Select(StageGroupDto.From).ToList());
 }

@@ -48,7 +48,8 @@ public sealed class StandingsRulesSource(
             tiebreakers,
             stage.QualifiersCount,
             groups,
-            teamIds.ToList());
+            teamIds.ToList(),
+            stage.EliminatedCount);
     }
 
     /// <summary>Строковое имя кругового формата в <see cref="StagePublicInfoDto.FormatType"/>.</summary>

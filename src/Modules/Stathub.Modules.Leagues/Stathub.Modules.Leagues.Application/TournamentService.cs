@@ -64,6 +64,7 @@ public sealed class TournamentService(
         bool penaltyShootoutEnabled,
         bool bonusGoalEnabled,
         int? qualifiersCount,
+        int? eliminatedCount,
         CancellationToken cancellationToken = default)
     {
         var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
@@ -78,7 +79,8 @@ public sealed class TournamentService(
             formatType,
             pointsRule,
             matchFormatRule,
-            qualifiersCount);
+            qualifiersCount,
+            eliminatedCount);
         await repository.SaveChangesAsync(cancellationToken);
 
         return stage.Id;
@@ -139,6 +141,7 @@ public sealed class TournamentService(
         bool penaltyShootoutEnabled,
         bool bonusGoalEnabled,
         int? qualifiersCount,
+        int? eliminatedCount,
         CancellationToken cancellationToken = default)
     {
         var tournament = await GetOrThrowAsync(leagueId, tournamentId, cancellationToken);
@@ -150,7 +153,7 @@ public sealed class TournamentService(
         var hasStartedMatches = await StageHasStartedMatchesAsync(stageId, cancellationToken);
 
         var stage = tournament.UpdateStage(
-            stageId, name, formatType, pointsRule, matchFormatRule, qualifiersCount, hasStartedMatches);
+            stageId, name, formatType, pointsRule, matchFormatRule, qualifiersCount, eliminatedCount, hasStartedMatches);
         await repository.SaveChangesAsync(cancellationToken);
 
         // Не начатые матчи этапа хранят копию регламента — переносим в них новые правила.

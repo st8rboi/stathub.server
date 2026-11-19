@@ -30,6 +30,12 @@ public sealed class Stage : Entity
     /// </summary>
     public int? QualifiersCount { get; private set; }
 
+    /// <summary>
+    /// Сколько последних команд таблицы вылетает; при группах — из каждой группы.
+    /// <c>null</c> — зоны вылета нет.
+    /// </summary>
+    public int? EliminatedCount { get; private set; }
+
     public IReadOnlyCollection<StageTiebreakerRule> TiebreakerRules => _tiebreakerRules.AsReadOnly();
     public IReadOnlyCollection<StageGroup> Groups => _groups.AsReadOnly();
 
@@ -46,7 +52,8 @@ public sealed class Stage : Entity
         StageFormatType formatType,
         PointsRule pointsRule,
         MatchFormatRule matchFormatRule,
-        int? qualifiersCount)
+        int? qualifiersCount,
+        int? eliminatedCount)
     {
         Id = id;
         TournamentId = tournamentId;
@@ -57,6 +64,7 @@ public sealed class Stage : Entity
         PointsRule = pointsRule;
         MatchFormatRule = matchFormatRule;
         QualifiersCount = qualifiersCount;
+        EliminatedCount = eliminatedCount;
     }
 
     internal static Stage Create(
@@ -67,7 +75,8 @@ public sealed class Stage : Entity
         StageFormatType formatType,
         PointsRule pointsRule,
         MatchFormatRule matchFormatRule,
-        int? qualifiersCount = null)
+        int? qualifiersCount = null,
+        int? eliminatedCount = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new DomainException("Stage name обязательное поле.");
@@ -77,7 +86,8 @@ public sealed class Stage : Entity
 
         ArgumentNullException.ThrowIfNull(pointsRule);
         ArgumentNullException.ThrowIfNull(matchFormatRule);
-        EnsureQualifiers(formatType, qualifiersCount);
+        EnsureZone(formatType, qualifiersCount, "выходящих дальше");
+        EnsureZone(formatType, eliminatedCount, "вылетающих");
 
         return new Stage(
             Guid.NewGuid(),
@@ -88,7 +98,8 @@ public sealed class Stage : Entity
             formatType,
             pointsRule,
             matchFormatRule,
-            qualifiersCount);
+            qualifiersCount,
+            eliminatedCount);
     }
 
     internal bool HasDifferentRules(
@@ -103,7 +114,8 @@ public sealed class Stage : Entity
         StageFormatType formatType,
         PointsRule pointsRule,
         MatchFormatRule matchFormatRule,
-        int? qualifiersCount)
+        int? qualifiersCount,
+        int? eliminatedCount)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new DomainException("Название этапа обязательное поле.");
@@ -113,7 +125,8 @@ public sealed class Stage : Entity
 
         ArgumentNullException.ThrowIfNull(pointsRule);
         ArgumentNullException.ThrowIfNull(matchFormatRule);
-        EnsureQualifiers(formatType, qualifiersCount);
+        EnsureZone(formatType, qualifiersCount, "выходящих дальше");
+        EnsureZone(formatType, eliminatedCount, "вылетающих");
 
         if (formatType != StageFormatType.Round && _groups.Count > 0)
             throw new DomainException("У этапа есть группы: сначала удалите их, затем меняйте формат на плей-офф.");
@@ -121,6 +134,7 @@ public sealed class Stage : Entity
         Name = name.Trim();
         FormatType = formatType;
         QualifiersCount = qualifiersCount;
+        EliminatedCount = eliminatedCount;
 
         // Value object заменяем, только если он действительно изменился: EF отслеживает owned-типы
         // по ссылке, и без нужды подменять их не стоит.
@@ -212,15 +226,16 @@ public sealed class Stage : Entity
             throw new ConflictException("Команда уже состоит в другой группе этого этапа.");
     }
 
-    private static void EnsureQualifiers(StageFormatType formatType, int? qualifiersCount)
+    /// <summary>Зона таблицы (выход дальше или вылет): только у кругового этапа и только положительная.</summary>
+    private static void EnsureZone(StageFormatType formatType, int? count, string what)
     {
-        if (qualifiersCount is null)
+        if (count is null)
             return;
 
         if (formatType != StageFormatType.Round)
-            throw new DomainException("Число выходящих дальше команд задаётся только у кругового этапа.");
+            throw new DomainException($"Число {what} команд задаётся только у кругового этапа.");
 
-        if (qualifiersCount <= 0)
-            throw new DomainException("Число выходящих дальше команд должно быть положительным.");
+        if (count <= 0)
+            throw new DomainException($"Число {what} команд должно быть положительным.");
     }
 }

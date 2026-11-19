@@ -67,6 +67,7 @@ public sealed class TournamentsController(TournamentService tournamentService) :
             request.PenaltyShootoutEnabled,
             request.BonusGoalEnabled,
             request.QualifiersCount,
+            request.EliminatedCount,
             cancellationToken);
 
         return Created($"leagues/{leagueId}/tournaments/{tournamentId}/stages/{stageId}", new { id = stageId });
@@ -112,6 +113,7 @@ public sealed class TournamentsController(TournamentService tournamentService) :
             request.PenaltyShootoutEnabled,
             request.BonusGoalEnabled,
             request.QualifiersCount,
+            request.EliminatedCount,
             cancellationToken));
 
     /// <summary>Удаление этапа. 409 — в этапе есть матчи.</summary>

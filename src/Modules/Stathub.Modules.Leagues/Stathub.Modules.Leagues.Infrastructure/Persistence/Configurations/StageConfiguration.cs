@@ -16,6 +16,7 @@ internal sealed class StageConfiguration : IEntityTypeConfiguration<Stage>
         builder.Property(s => s.TournamentId).IsRequired();
         builder.Property(s => s.DivisionId).IsRequired();
         builder.Property(s => s.QualifiersCount);
+        builder.Property(s => s.EliminatedCount);
         builder.Property(s => s.Order).IsRequired();
         builder.Property(s => s.Name).IsRequired().HasMaxLength(200);
         builder.Property(s => s.FormatType).IsRequired();

@@ -143,6 +143,7 @@ public sealed class Tournament : AggregateRoot
         PointsRule pointsRule,
         MatchFormatRule matchFormatRule,
         int? qualifiersCount,
+        int? eliminatedCount,
         bool stageHasStartedMatches)
     {
         var stage = GetStage(stageId);
@@ -158,8 +159,8 @@ public sealed class Tournament : AggregateRoot
                     "Правила этапа нельзя менять: в нём уже начаты матчи. Изменить можно только название.");
         }
 
-        // Число выходящих дальше — пометка в таблице, а не правило матча: его можно менять всегда.
-        stage.Update(name, formatType, pointsRule, matchFormatRule, qualifiersCount);
+        // Зоны выхода и вылета — пометки в таблице, а не правила матча: их можно менять всегда.
+        stage.Update(name, formatType, pointsRule, matchFormatRule, qualifiersCount, eliminatedCount);
         return stage;
     }
 
@@ -230,7 +231,8 @@ public sealed class Tournament : AggregateRoot
         StageFormatType formatType,
         PointsRule pointsRule,
         MatchFormatRule matchFormatRule,
-        int? qualifiersCount = null)
+        int? qualifiersCount = null,
+        int? eliminatedCount = null)
     {
         if (Status != TournamentStatus.Scheduled)
             throw new ConflictException($"Стадия может быть добавлена только к турниру со статусом {TournamentStatus.Scheduled}.");
@@ -238,7 +240,8 @@ public sealed class Tournament : AggregateRoot
         var division = GetDivision(divisionId);
 
         var order = _stages.Count(s => s.DivisionId == division.Id) + 1;
-        var stage = Stage.Create(Id, division.Id, order, name, formatType, pointsRule, matchFormatRule, qualifiersCount);
+        var stage = Stage.Create(
+            Id, division.Id, order, name, formatType, pointsRule, matchFormatRule, qualifiersCount, eliminatedCount);
         _stages.Add(stage);
         return stage;
     }

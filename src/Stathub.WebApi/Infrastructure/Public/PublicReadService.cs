@@ -762,7 +762,8 @@ public sealed class PublicReadService(
         stage.DivisionId,
         stage.DivisionName,
         stage.DivisionsCount,
-        stage.QualifiersCount);
+        stage.QualifiersCount,
+        stage.EliminatedCount);
 
     private static PublicStageSummaryDto ToStageSummary(StageDto stage) => new(
         stage.Id,

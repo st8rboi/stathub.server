@@ -50,12 +50,17 @@ public sealed class MatchEventService(
     /// Автор — статистик: ему доступны только события статистики и их отмена, но не голы,
     /// карточки и жизненный цикл матча. Такие события отклоняются поштучно, как и прочие отказы.
     /// </param>
+    /// <param name="organizerCorrection">
+    /// Автор — организатор или админ: ему доступна правка протокола завершённого матча
+    /// (см. <see cref="Match.EnsureCanAccept"/>). Судье и статистику протокол после свистка закрыт.
+    /// </param>
     /// <param name="cancellationToken"></param>
     public async Task<AppendEventsResultDto> AppendEventsAsync(
         Guid matchId,
         IReadOnlyList<NewMatchEvent> incoming,
         DateTime? clientSentAtUtc = null,
         bool statisticsOnly = false,
+        bool organizerCorrection = false,
         CancellationToken cancellationToken = default)
     {
         if (incoming.Count == 0)
@@ -103,7 +108,7 @@ public sealed class MatchEventService(
                 if (statisticsOnly)
                     EnsureStatisticianMayAdd(matchEvent, eventsById);
 
-                match.EnsureCanAccept(matchEvent);
+                match.EnsureCanAccept(matchEvent, organizerCorrection);
                 EnsureVoidTargetIsValid(matchEvent, eventsById);
 
                 if (matchEvent.IsLifecycle)

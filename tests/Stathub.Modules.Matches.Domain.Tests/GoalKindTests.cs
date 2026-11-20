@@ -76,6 +76,7 @@ public sealed class GoalKindTests
     public void EnsureCanAccept_RejectsBonusGoalWhenStageDoesNotAllowIt()
     {
         var match = CreateMatch(bonusGoalEnabled: false);
+        match.Start(DateTime.UtcNow);
         var bonus = Event(MatchEventType.Goal, HomeTeamId, matchId: match.Id, goalKind: GoalKind.Bonus);
 
         Assert.Throws<DomainException>(() => match.EnsureCanAccept(bonus));
@@ -85,6 +86,7 @@ public sealed class GoalKindTests
     public void EnsureCanAccept_AcceptsBonusGoalWhenStageAllowsIt()
     {
         var match = CreateMatch(bonusGoalEnabled: true);
+        match.Start(DateTime.UtcNow);
         var bonus = Event(MatchEventType.Goal, HomeTeamId, matchId: match.Id, goalKind: GoalKind.Bonus);
 
         match.EnsureCanAccept(bonus);

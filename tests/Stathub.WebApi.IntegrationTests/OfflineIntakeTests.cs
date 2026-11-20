@@ -70,9 +70,10 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
     {
         var scenario = await CreateScenarioAsync();
         var now = DateTime.UtcNow;
+        await SendAsync(scenario, [Event("MatchStarted", 1, now.AddMinutes(-1))]);
 
-        var bad = Event("Goal", 1, now, Guid.NewGuid());
-        var good = Event("Goal", 2, now, scenario.AwayTeamId);
+        var bad = Event("Goal", 2, now, Guid.NewGuid());
+        var good = Event("Goal", 3, now, scenario.AwayTeamId);
 
         var result = await SendAsync(scenario, [bad, good]);
 
@@ -95,9 +96,59 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
 
         await SendAsync(scenario, [Event("MatchStarted", 2, now), Event("MatchFinished", 3, now)]);
 
-        var lateGoal = await SendAsync(scenario, [Event("Goal", 4, now, scenario.HomeTeamId)]);
+        // После свистка протокол закрыт для судьи; правка завершённого матча — только организатору.
+        var referee = await scenario.Organizer.CreateStaffAsync("Referee", scenario.MatchId);
+        var lateGoal = await SendAsync(referee, scenario.MatchId, [Event("Goal", 4, now, scenario.HomeTeamId)]);
         Assert.Single(lateGoal.GetProperty("rejectedEvents").EnumerateArray());
         Assert.Equal(0, lateGoal.GetProperty("state").GetProperty("match").GetProperty("homeScore").GetInt32());
+    }
+
+    [Fact]
+    public async Task GoalBeforeKickOff_IsRejected_ButStatisticsIsAccepted()
+    {
+        var scenario = await CreateScenarioAsync();
+        var now = DateTime.UtcNow;
+
+        var goal = Event("Goal", 1, now, scenario.HomeTeamId);
+        var corner = Event("Corner", 2, now, scenario.AwayTeamId);
+
+        var result = await SendAsync(scenario, [goal, corner]);
+        var match = result.GetProperty("state").GetProperty("match");
+
+        Assert.Equal(goal.id, Assert.Single(result.GetProperty("rejectedEvents").EnumerateArray()).GetProperty("eventId").GetGuid());
+        Assert.Equal(corner.id, Assert.Single(result.GetProperty("acceptedEventIds").EnumerateArray()).GetGuid());
+        Assert.Equal("Scheduled", match.GetProperty("status").GetString());
+        Assert.Equal(0, match.GetProperty("homeScore").GetInt32());
+    }
+
+    [Fact]
+    public async Task Organizer_CorrectsFinishedMatch_ButCannotChangeItsStatus()
+    {
+        var scenario = await CreateScenarioAsync();
+        var kickOff = DateTime.UtcNow.AddMinutes(-100);
+
+        var wrongGoal = Event("Goal", 2, kickOff.AddMinutes(10), scenario.HomeTeamId);
+        await SendAsync(scenario, [Event("MatchStarted", 1, kickOff), wrongGoal, Event("MatchFinished", 3, kickOff.AddMinutes(95))]);
+
+        var result = await SendAsync(scenario, [
+            new
+            {
+                id = Guid.NewGuid(),
+                type = "EventVoided",
+                targetEventId = (Guid?)wrongGoal.id,
+                clientTimestampUtc = DateTime.UtcNow,
+                sequenceNumber = 4L
+            },
+            Event("Goal", 5, kickOff.AddMinutes(10), scenario.AwayTeamId),
+            Event("MatchStarted", 6, DateTime.UtcNow)
+        ]);
+        var match = result.GetProperty("state").GetProperty("match");
+
+        Assert.Equal(2, result.GetProperty("acceptedEventIds").GetArrayLength());
+        Assert.Single(result.GetProperty("rejectedEvents").EnumerateArray());
+        Assert.Equal("Finished", match.GetProperty("status").GetString());
+        Assert.Equal(0, match.GetProperty("homeScore").GetInt32());
+        Assert.Equal(1, match.GetProperty("awayScore").GetInt32());
     }
 
     [Fact]
@@ -111,6 +162,8 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
             $"/discipline/tournaments/{scenario.TournamentId}",
             new { teamId = scenario.HomeTeamId, playerId, reason = "Red card", matchesBanned = 2 })).ReadIdAsync();
 
+        await SendAsync(scenario, [Event("MatchStarted", 1, now.AddMinutes(-1))]);
+
         var goal = new
         {
             id = Guid.NewGuid(),
@@ -119,7 +172,7 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
             playerId = (Guid?)playerId,
             targetEventId = (Guid?)null,
             clientTimestampUtc = now,
-            sequenceNumber = 1L
+            sequenceNumber = 2L
         };
 
         var result = await SendAsync(scenario, [goal]);
@@ -127,7 +180,7 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
 
         Assert.Equal(1, state.GetProperty("match").GetProperty("homeScore").GetInt32());
         Assert.Equal(1, state.GetProperty("match").GetProperty("eventsForReview").GetInt32());
-        Assert.False(string.IsNullOrWhiteSpace(state.GetProperty("events")[0].GetProperty("reviewNote").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(state.GetProperty("events")[1].GetProperty("reviewNote").GetString()));
 
         var voided = await SendAsync(scenario, [
             new
@@ -138,7 +191,7 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
                 playerId = (Guid?)null,
                 targetEventId = (Guid?)goal.id,
                 clientTimestampUtc = now,
-                sequenceNumber = 2L
+                sequenceNumber = 3L
             }
         ]);
 
@@ -256,10 +309,13 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
     private static EventBody Event(string type, long sequenceNumber, DateTime clientTimestampUtc, Guid? teamId = null) =>
         new(Guid.NewGuid(), type, teamId, clientTimestampUtc, sequenceNumber);
 
-    private static async Task<JsonElement> SendAsync(Scenario scenario, object[] events, DateTime? sentAtUtc = null)
+    private static Task<JsonElement> SendAsync(Scenario scenario, object[] events, DateTime? sentAtUtc = null) =>
+        SendAsync(scenario.Organizer.Client, scenario.MatchId, events, sentAtUtc);
+
+    private static async Task<JsonElement> SendAsync(HttpClient client, Guid matchId, object[] events, DateTime? sentAtUtc = null)
     {
-        var response = await scenario.Organizer.Client.PostAsJsonAsync(
-            $"/matches/{scenario.MatchId}/events",
+        var response = await client.PostAsJsonAsync(
+            $"/matches/{matchId}/events",
             new { events, sentAtUtc });
 
         response.EnsureSuccessStatusCode();

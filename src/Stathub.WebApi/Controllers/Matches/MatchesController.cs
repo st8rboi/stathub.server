@@ -149,6 +149,23 @@ public sealed class MatchesController(
     }
 
     /// <summary>
+    /// Отмена матча: судья начал не тот матч, или матч не состоялся. Протокол сохраняется,
+    /// матч уходит из live, таблицы и статистики; запоздавшие события судьи отклоняются.
+    /// 409 — матч уже отменён.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = AuthPolicies.Organizer)]
+    public async Task<ActionResult<MatchDto>> CancelMatch(Guid id, CancellationToken cancellationToken)
+    {
+        await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
+
+        var match = await matchService.CancelAsync(id, cancellationToken);
+        await matchNotifier.PublishMatchChangedAsync(id, match.StageId, cancellationToken);
+
+        return Ok(match);
+    }
+
+    /// <summary>
     /// Удаление ошибочно созданного матча (не начатого, без событий) вместе с его взносами.
     /// Назначения судей на матч отзываются. 409 — матч уже вели или по нему есть оплаченный взнос.
     /// </summary>
@@ -180,6 +197,10 @@ public sealed class MatchesController(
         CancellationToken cancellationToken)
     {
         var access = await matchAccessGuard.EnsureMatchAsync(id, cancellationToken);
+
+        // null внутри массива — битый клиент: понятный 400 вместо NullReferenceException и 500.
+        if (request.Events?.Any(item => item is null) == true)
+            throw new DomainException("В списке событий есть пустой элемент.");
 
         var events = (request.Events ?? [])
             .Select(ToNewEvent)

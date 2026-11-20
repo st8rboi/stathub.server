@@ -22,11 +22,28 @@ public sealed record DisqualificationDto(
 /// <summary>Матчи команды в турнире — для подсчёта отбытого срока.</summary>
 public interface ITeamMatchesSource
 {
-    /// <summary>Завершённые матчи команды в турнире с указанного момента.</summary>
-    Task<int> CountFinishedSinceAsync(
+    /// <summary>
+    /// Матчи команды в турнире, доигранные (по финальному свистку) строго после
+    /// <paramref name="afterUtc"/> и до <paramref name="beforeUtc"/>, если граница задана.
+    /// </summary>
+    Task<int> CountFinishedBetweenAsync(
         Guid tournamentId,
         Guid teamId,
-        DateTime sinceUtc,
+        DateTime afterUtc,
+        DateTime? beforeUtc,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Заявка игрока за команду турнира: с какого и по какой день он за неё играл.</summary>
+public sealed record PlayerTeamStint(Guid TeamId, DateOnly JoinedOn, DateOnly? LeftOn);
+
+/// <summary>История заявок игрока — реализуется адаптером поверх модуля заявок.</summary>
+public interface IPlayerRosterHistory
+{
+    /// <summary>Все заявки игрока в турнире, включая закрытые (отзаявка, трансфер).</summary>
+    Task<IReadOnlyList<PlayerTeamStint>> GetStintsAsync(
+        Guid tournamentId,
+        Guid playerId,
         CancellationToken cancellationToken = default);
 }
 
@@ -49,9 +66,9 @@ public interface IDisqualificationRepository
         Guid tournamentId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Не снятая дисквалификация игрока в турнире — независимо от команды.</summary>
     Task<Disqualification?> FindActiveAsync(
         Guid tournamentId,
-        Guid teamId,
         Guid playerId,
         CancellationToken cancellationToken = default);
 
@@ -60,10 +77,18 @@ public interface IDisqualificationRepository
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 
-/// <summary>Дисциплинарный учёт: выдача, снятие, список и остаток срока.</summary>
+/// <summary>
+/// Дисциплинарный учёт: выдача, снятие, список и остаток срока.
+/// <para>
+/// Дисквалификация следует за игроком в пределах турнира: после трансфера она действует
+/// и в новой команде. Срок отбывается матчами той команды, за которую игрок заявлен на момент
+/// матча; в зачёт идут только матчи, доигранные после выдачи.
+/// </para>
+/// </summary>
 public sealed class DisciplineService(
     IDisqualificationRepository repository,
     ITeamMatchesSource teamMatches,
+    IPlayerRosterHistory rosterHistory,
     IDisciplineDirectory directory)
 {
     public async Task<Guid> IssueAsync(
@@ -76,14 +101,18 @@ public sealed class DisciplineService(
         string? comment,
         CancellationToken cancellationToken = default)
     {
-        var existing = await repository.FindActiveAsync(tournamentId, teamId, playerId, cancellationToken);
+        var stints = await rosterHistory.GetStintsAsync(tournamentId, playerId, cancellationToken);
+        if (stints.All(stint => stint.TeamId != teamId))
+            throw new DomainException("Игрок не заявлен за эту команду в турнире.");
+
+        var existing = await repository.FindActiveAsync(tournamentId, playerId, cancellationToken);
         if (existing is not null)
         {
             // Отбывание считается на чтении, поэтому отбытая запись в БД остаётся незакрытой.
             // Действующей она уже не является — закрываем её и выдаём новую; иначе после первой
             // отбытой дисквалификации игроку нельзя было бы выдать следующую.
             var served = existing.MatchesBanned is { } banned
-                && await teamMatches.CountFinishedSinceAsync(tournamentId, teamId, existing.IssuedAtUtc, cancellationToken) >= banned;
+                && await CountServedAsync(existing, stints, cancellationToken) >= banned;
 
             if (!served)
                 throw new ConflictException("У игрока уже есть действующая дисквалификация в этом турнире.");
@@ -143,8 +172,7 @@ public sealed class DisciplineService(
 
         foreach (var item in list)
         {
-            var served = await teamMatches.CountFinishedSinceAsync(
-                item.TournamentId, item.TeamId, item.IssuedAtUtc, cancellationToken);
+            var served = await CountServedAsync(item, cancellationToken);
 
             int? left = item.MatchesBanned is { } banned ? Math.Max(0, banned - served) : null;
             var active = item.IsActive && (left is null || left > 0);
@@ -169,24 +197,63 @@ public sealed class DisciplineService(
         return result.OrderByDescending(item => item.IssuedAtUtc).ToList();
     }
 
-    /// <summary>Дисквалифицирован ли игрок на момент времени (для блокировки событий).</summary>
+    /// <summary>
+    /// Дисквалифицирован ли игрок сейчас (для пометок в протоколе). Команда не важна:
+    /// бан следует за игроком и после трансфера.
+    /// </summary>
     public async Task<int?> GetBanLeftAsync(
         Guid tournamentId,
-        Guid teamId,
         Guid playerId,
-        DateTime atUtc,
         CancellationToken cancellationToken = default)
     {
-        var active = await repository.FindActiveAsync(tournamentId, teamId, playerId, cancellationToken);
+        var active = await repository.FindActiveAsync(tournamentId, playerId, cancellationToken);
         if (active is null)
             return null;
 
         if (active.MatchesBanned is not { } banned)
             return int.MaxValue;
 
-        var served = await teamMatches.CountFinishedSinceAsync(tournamentId, teamId, active.IssuedAtUtc, cancellationToken);
-        var left = Math.Max(0, banned - served);
+        var left = Math.Max(0, banned - await CountServedAsync(active, cancellationToken));
 
         return left > 0 ? left : null;
+    }
+
+    private async Task<int> CountServedAsync(Disqualification item, CancellationToken cancellationToken) =>
+        await CountServedAsync(
+            item,
+            await rosterHistory.GetStintsAsync(item.TournamentId, item.PlayerId, cancellationToken),
+            cancellationToken);
+
+    /// <summary>
+    /// Отбытые матчи: по каждой заявке игрока — матчи её команды, доигранные после выдачи и
+    /// пока заявка действовала. Без истории заявок (старые записи) — матчи команды из дисквалификации.
+    /// </summary>
+    private async Task<int> CountServedAsync(
+        Disqualification item,
+        IReadOnlyList<PlayerTeamStint> stints,
+        CancellationToken cancellationToken)
+    {
+        if (stints.Count == 0)
+            return await teamMatches.CountFinishedBetweenAsync(
+                item.TournamentId, item.TeamId, item.IssuedAtUtc, beforeUtc: null, cancellationToken);
+
+        var served = 0;
+
+        foreach (var stint in stints)
+        {
+            var joinedAtUtc = stint.JoinedOn.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var afterUtc = joinedAtUtc > item.IssuedAtUtc ? joinedAtUtc : item.IssuedAtUtc;
+
+            // День ухода уже не день старой команды: при трансфере он же — первый день в новой.
+            DateTime? beforeUtc = stint.LeftOn?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+            if (beforeUtc is { } before && before <= afterUtc)
+                continue;
+
+            served += await teamMatches.CountFinishedBetweenAsync(
+                item.TournamentId, stint.TeamId, afterUtc, beforeUtc, cancellationToken);
+        }
+
+        return served;
     }
 }

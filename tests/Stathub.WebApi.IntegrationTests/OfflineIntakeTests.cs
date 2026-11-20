@@ -156,6 +156,7 @@ public sealed class OfflineIntakeTests(StathubApiFactory factory)
     {
         var scenario = await CreateScenarioAsync();
         var playerId = await scenario.Organizer.CreatePlayerAsync();
+        await scenario.Organizer.RegisterPlayerAsync(scenario.HomeTeamId, playerId);
         var now = DateTime.UtcNow;
 
         await (await scenario.Organizer.Client.PostAsJsonAsync(

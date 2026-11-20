@@ -145,17 +145,18 @@ public sealed class MatchService(
     }
 
     /// <summary>
-    /// Сколько матчей команда доиграла в турнире после момента <paramref name="afterUtc"/>:
-    /// отбытие дисквалификации. Считается по финальному свистку, а не по расписанию —
-    /// матч, в котором игрок получил красную, сыгран до выдачи и в отбытие не идёт,
-    /// а перенесённый матч, доигранный после выдачи, идёт.
+    /// Сколько матчей команда доиграла в турнире после <paramref name="afterUtc"/> (и до
+    /// <paramref name="beforeUtc"/>, если задано): отбытие дисквалификации. Считается по финальному
+    /// свистку, а не по расписанию — матч, в котором игрок получил красную, сыгран до выдачи и
+    /// в отбытие не идёт, а перенесённый матч, доигранный после выдачи, идёт.
     /// </summary>
-    public Task<int> CountFinishedTeamMatchesAfterAsync(
+    public Task<int> CountFinishedTeamMatchesAsync(
         Guid tournamentId,
         Guid teamId,
         DateTime afterUtc,
+        DateTime? beforeUtc,
         CancellationToken cancellationToken = default) =>
-        repository.CountFinishedAfterAsync(tournamentId, teamId, afterUtc, cancellationToken);
+        repository.CountFinishedAsync(tournamentId, teamId, afterUtc, beforeUtc, cancellationToken);
 
     /// <summary>Этап и время начала всех матчей: витрина строит из них полосу дней с матчами.</summary>
     public Task<IReadOnlyList<MatchSlotDto>> ListSlotsAsync(CancellationToken cancellationToken = default) =>
@@ -181,6 +182,24 @@ public sealed class MatchService(
             ResolveGroup(stageFormat, homeTeamId, awayTeamId),
             await HasEventsAsync(id, cancellationToken));
         await repository.SaveChangesAsync(cancellationToken);
+
+        return MatchDto.From(match);
+    }
+
+    /// <summary>
+    /// Отмена матча организатором (начат по ошибке или не состоялся): протокол остаётся,
+    /// матч выпадает из live, таблицы, статистики и отбытия дисквалификаций.
+    /// </summary>
+    public async Task<MatchDto> CancelAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        // Под той же блокировкой, что и приём событий: батч судьи не должен перезаписать отмену.
+        await using var writeScope = await eventRepository.BeginMatchWriteAsync(id, cancellationToken);
+
+        var match = await GetOrThrowAsync(id, cancellationToken);
+        match.Cancel();
+
+        await repository.SaveChangesAsync(cancellationToken);
+        await writeScope.CommitAsync(cancellationToken);
 
         return MatchDto.From(match);
     }

@@ -32,6 +32,16 @@ public interface IMatchRepository
         DateTime toUtc,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Сколько матчей команды в турнире завершено строго после момента <paramref name="afterUtc"/>
+    /// (по финальному свистку; у матчей без отметки свистка — по времени начала из расписания).
+    /// </summary>
+    Task<int> CountFinishedAfterAsync(
+        Guid tournamentId,
+        Guid teamId,
+        DateTime afterUtc,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Этап и время начала всех матчей — без загрузки самих матчей (полоса дат витрины).</summary>
     Task<IReadOnlyList<MatchSlotDto>> GetSlotsAsync(CancellationToken cancellationToken = default);
 

@@ -172,6 +172,7 @@ public sealed class MatchesController(
     // Батч событий протокола, включая смену статуса матча. Идемпотентно по клиентскому UUID:
     // повторы из офлайн-очереди не создают дублей и возвращаются в duplicateEventIds.
     // Статистик тем же эндпоинтом отправляет удары, фолы и угловые — остальное ему отклоняется.
+    // Организатор тем же эндпоинтом исправляет протокол завершённого матча (кроме смены статуса).
     [HttpPost("{id:guid}/events")]
     public async Task<ActionResult<AppendEventsResultDto>> AppendEvents(
         Guid id,
@@ -189,7 +190,10 @@ public sealed class MatchesController(
             events,
             request.SentAtUtc,
             statisticsOnly: access == MatchAccess.StatisticsOnly,
-            cancellationToken);
+            // Протокол завершённого матча правит только организатор/админ своей организации
+            // (владение проверено в EnsureMatchAsync); судье и статистику он закрыт.
+            organizerCorrection: currentUser.Role is UserRole.Organizer or UserRole.Admin,
+            cancellationToken: cancellationToken);
 
         // Пуш зрителям — только после коммита; сам пуш best-effort (doc §4, §9).
         await matchNotifier.PublishMatchChangedAsync(id, result.State.Match.StageId, cancellationToken);

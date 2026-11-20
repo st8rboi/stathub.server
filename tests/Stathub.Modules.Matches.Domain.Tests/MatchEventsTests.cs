@@ -107,6 +107,56 @@ public sealed class MatchEventsTests
     }
 
     [Fact]
+    public void EnsureCanAccept_RejectsGoalBeforeKickOff()
+    {
+        var match = CreateMatch();
+
+        Assert.Throws<DomainException>(() => match.EnsureCanAccept(Goal(match, HomeTeamId, 1)));
+    }
+
+    [Fact]
+    public void EnsureCanAccept_AcceptsStatisticAndItsVoidBeforeKickOff()
+    {
+        var match = CreateMatch();
+        var corner = Event(match, MatchEventType.Corner, HomeTeamId, 1);
+
+        match.EnsureCanAccept(corner);
+        match.EnsureCanAccept(VoidGoal(match, corner, 2));
+    }
+
+    [Fact]
+    public void EnsureCanAccept_AcceptsKickOffOfScheduledMatch()
+    {
+        var match = CreateMatch();
+
+        match.EnsureCanAccept(Event(match, MatchEventType.MatchStarted, teamId: null, 1));
+    }
+
+    [Fact]
+    public void EnsureCanAccept_AfterFinish_RejectsRefereeButAcceptsOrganizerCorrection()
+    {
+        var match = CreateMatch();
+        match.Start(DateTime.UtcNow.AddMinutes(-100));
+        match.Finish(DateTime.UtcNow.AddMinutes(-5));
+        var goal = Goal(match, AwayTeamId, 3);
+
+        Assert.Throws<DomainException>(() => match.EnsureCanAccept(goal));
+        match.EnsureCanAccept(goal, organizerCorrection: true);
+    }
+
+    [Fact]
+    public void EnsureCanAccept_AfterFinish_OrganizerCannotChangeStatus()
+    {
+        var match = CreateMatch();
+        match.Start(DateTime.UtcNow.AddMinutes(-100));
+        match.Finish(DateTime.UtcNow.AddMinutes(-5));
+
+        Assert.Throws<DomainException>(() => match.EnsureCanAccept(
+            Event(match, MatchEventType.MatchStarted, teamId: null, 3),
+            organizerCorrection: true));
+    }
+
+    [Fact]
     public void Lifecycle_TimesComeFromEvents_NotFromServerArrival()
     {
         var match = CreateMatch();
@@ -264,6 +314,18 @@ public sealed class MatchEventsTests
         Guid.NewGuid(),
         match.Id,
         MatchEventType.Goal,
+        teamId,
+        playerId: null,
+        relatedPlayerId: null,
+        targetEventId: null,
+        reason: null,
+        DateTime.UtcNow,
+        sequenceNumber);
+
+    private static MatchEvent Event(Match match, MatchEventType type, Guid? teamId, long sequenceNumber) => MatchEvent.Create(
+        Guid.NewGuid(),
+        match.Id,
+        type,
         teamId,
         playerId: null,
         relatedPlayerId: null,

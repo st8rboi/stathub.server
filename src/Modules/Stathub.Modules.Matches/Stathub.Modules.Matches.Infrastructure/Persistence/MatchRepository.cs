@@ -71,6 +71,21 @@ internal class MatchRepository(MatchesDbContext dbContext) : IMatchRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<int> CountFinishedAfterAsync(
+        Guid tournamentId,
+        Guid teamId,
+        DateTime afterUtc,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Matches
+            .AsNoTracking()
+            .Where(match => match.TournamentId == tournamentId
+                            && match.Status == MatchStatus.Finished
+                            && (match.HomeTeamId == teamId || match.AwayTeamId == teamId)
+                            && (match.FinishedAtUtc ?? match.ScheduledTimeUtc) > afterUtc)
+            .CountAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<MatchSlotDto>> GetSlotsAsync(CancellationToken cancellationToken = default)
     {
         return await dbContext.Matches

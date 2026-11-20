@@ -71,26 +71,18 @@ internal sealed class DisqualificationRepository(DisciplineDbContext dbContext) 
 }
 
 /// <summary>
-/// Завершённые матчи команды после выдачи дисквалификации. Берём матчи интервалом
-/// от даты выдачи и фильтруем по команде и статусу — отдельный читатель не нужен.
+/// Завершённые матчи команды после выдачи дисквалификации — по моменту финального свистка.
+/// Раньше матчи отбирались по расписанию с запасом в сутки, и в отбытие попадал сам матч
+/// с красной карточкой, а перенесённый и доигранный позже матч — нет.
 /// </summary>
 internal sealed class TeamMatchesSource(MatchService matchService) : ITeamMatchesSource
 {
-    public async Task<int> CountFinishedSinceAsync(
+    public Task<int> CountFinishedSinceAsync(
         Guid tournamentId,
         Guid teamId,
         DateTime sinceUtc,
-        CancellationToken cancellationToken = default)
-    {
-        var from = sinceUtc.AddDays(-1);
-        var to = DateTime.UtcNow.AddYears(1);
-        var matches = await matchService.ListByPeriodAsync(from, to, cancellationToken);
-
-        return matches.Count(match =>
-            match.TournamentId == tournamentId
-            && match.Status == MatchStatus.Finished
-            && (match.HomeTeamId == teamId || match.AwayTeamId == teamId));
-    }
+        CancellationToken cancellationToken = default) =>
+        matchService.CountFinishedTeamMatchesAfterAsync(tournamentId, teamId, sinceUtc, cancellationToken);
 }
 
 internal sealed class DisciplineDirectory(

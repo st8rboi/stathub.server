@@ -144,6 +144,19 @@ public sealed class MatchService(
         return matches.Select(MatchDto.From).ToList();
     }
 
+    /// <summary>
+    /// Сколько матчей команда доиграла в турнире после момента <paramref name="afterUtc"/>:
+    /// отбытие дисквалификации. Считается по финальному свистку, а не по расписанию —
+    /// матч, в котором игрок получил красную, сыгран до выдачи и в отбытие не идёт,
+    /// а перенесённый матч, доигранный после выдачи, идёт.
+    /// </summary>
+    public Task<int> CountFinishedTeamMatchesAfterAsync(
+        Guid tournamentId,
+        Guid teamId,
+        DateTime afterUtc,
+        CancellationToken cancellationToken = default) =>
+        repository.CountFinishedAfterAsync(tournamentId, teamId, afterUtc, cancellationToken);
+
     /// <summary>Этап и время начала всех матчей: витрина строит из них полосу дней с матчами.</summary>
     public Task<IReadOnlyList<MatchSlotDto>> ListSlotsAsync(CancellationToken cancellationToken = default) =>
         repository.GetSlotsAsync(cancellationToken);

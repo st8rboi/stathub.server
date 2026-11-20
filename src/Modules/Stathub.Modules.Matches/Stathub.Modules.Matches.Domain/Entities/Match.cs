@@ -285,9 +285,9 @@ public sealed class Match : AggregateRoot
     }
 
     /// <summary>
-    /// Проверяет, что протокол ещё можно менять. По документации после финального свистка
-    /// события правит только организатор, но модуля Identity пока нет — поэтому после
-    /// завершения протокол закрыт для всех.
+    /// Проверяет, что протокол открыт для судьи и статистика: после финального свистка
+    /// (и у отменённого матча) он закрыт. Правку завершённого матча организатором
+    /// разрешает <see cref="EnsureCanAccept"/>.
     /// </summary>
     public void EnsureEventsCanBeChanged()
     {
@@ -352,15 +352,55 @@ public sealed class Match : AggregateRoot
     }
 
     /// <summary>Может ли новое событие войти в протокол: матч открыт, команда играет в этом матче.</summary>
-    public void EnsureCanAccept(MatchEvent matchEvent)
+    /// <param name="matchEvent">Новое событие</param>
+    /// <param name="organizerCorrection">
+    /// Автор — организатор или админ: ему можно править протокол завершённого матча
+    /// (отменить ошибочное событие, дописать забытое). Статус матча при этом не меняется:
+    /// события жизненного цикла после свистка закрыты для всех.
+    /// </param>
+    public void EnsureCanAccept(MatchEvent matchEvent, bool organizerCorrection = false)
     {
-        if (!IsLateStatistic(matchEvent))
-            EnsureEventsCanBeChanged();
-
+        EnsureProtocolOpenFor(matchEvent, organizerCorrection);
         EnsureEventBelongsToMatch(matchEvent);
 
         if (matchEvent.GoalKind == GoalKind.Bonus && !BonusGoalEnabled)
             throw new DomainException("Бонусный мяч не предусмотрен регламентом этапа.");
+    }
+
+    private void EnsureProtocolOpenFor(MatchEvent matchEvent, bool organizerCorrection)
+    {
+        // Переходы статуса проверяет ApplyLifecycle; здесь — только закрытый протокол.
+        if (matchEvent.IsLifecycle)
+        {
+            EnsureEventsCanBeChanged();
+            return;
+        }
+
+        if (Status == MatchStatus.Scheduled)
+        {
+            EnsureAllowedBeforeKickOff(matchEvent);
+            return;
+        }
+
+        if (Status == MatchStatus.Finished && (organizerCorrection || IsLateStatistic(matchEvent)))
+            return;
+
+        EnsureEventsCanBeChanged();
+    }
+
+    /// <summary>
+    /// До стартового свистка голов, карточек и замен не бывает: такое событие означает, что судья
+    /// забыл начать матч, а принятое оно оставило бы не начатый матч со счётом, который нельзя
+    /// ни перенести, ни удалить. Статистику принимаем: статистик и судья отправляют события
+    /// независимо, и удар может дойти раньше офлайн-старта судьи. Отмена до старта может
+    /// касаться только такого удара (старт отменить нельзя).
+    /// </summary>
+    private static void EnsureAllowedBeforeKickOff(MatchEvent matchEvent)
+    {
+        if (matchEvent.IsStatistic || matchEvent.Type == MatchEventType.EventVoided)
+            return;
+
+        throw new DomainException("Матч ещё не начат: сначала начните матч, затем отмечайте события.");
     }
 
     /// <summary>

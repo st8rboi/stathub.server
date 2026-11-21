@@ -1,18 +1,18 @@
+
 using Stathub.Modules.Standings.Domain.Enums;
 using Stathub.Modules.Standings.Domain.Models;
 
 namespace Stathub.Modules.Standings.Domain;
 
 /// <summary>
-/// Расчёт турнирной таблицы этапа из результатов матчей. Чистая функция без состояния:
-/// таблица нигде не хранится и пересчитывается на каждый запрос (documentation/doc.md §9.2),
-/// поэтому логики инвалидации нет вовсе.
+/// Расчёт турнирной таблицы этапа из результатов матчей.
+/// Таблица не хранится и пересчитывается при каждом запросе.
 /// </summary>
 public static class StandingsCalculator
 {
     /// <summary>
-    /// Таблицы этапа: одна общая либо по одной на группу. В групповой таблице учитываются только
-    /// матчи этой группы. Команды группы (или участники общей таблицы) видны и без сыгранных матчей — с нулями.
+    /// Формирует одну общую таблицу либо отдельные таблицы по группам.
+    /// Команды отображаются даже без сыгранных матчей.
     /// </summary>
     public static IReadOnlyList<StandingsTable> CalculateTables(
         IReadOnlyCollection<StandingsMatch> matches,
@@ -25,16 +25,26 @@ public static class StandingsCalculator
         var eliminated = Math.Max(rules.EliminatedCount ?? 0, 0);
 
         if (rules.Groups is not { Count: > 0 } groups)
+        {
             return
             [
-                new StandingsTable(null, null, Calculate(matches, rules, rules.TeamIds ?? []), qualifiers, eliminated),
+                new StandingsTable(
+                    null,
+                    null,
+                    Calculate(matches, rules, rules.TeamIds ?? []),
+                    qualifiers,
+                    eliminated)
             ];
+        }
 
         return groups
             .OrderBy(group => group.Order)
             .Select(group =>
             {
-                var groupMatches = matches.Where(match => match.GroupId == group.Id).ToList();
+                var groupMatches = matches
+                    .Where(match => match.GroupId == group.Id)
+                    .ToList();
+
                 return new StandingsTable(
                     group.Id,
                     group.Name,
@@ -47,10 +57,15 @@ public static class StandingsCalculator
 
     public static IReadOnlyList<StandingsEntry> Calculate(
         IReadOnlyCollection<StandingsMatch> matches,
-        StandingsRules rules) =>
-        Calculate(matches, rules, []);
+        StandingsRules rules)
+    {
+        return Calculate(matches, rules, []);
+    }
 
-    /// <param name="teamIds">Команды, которые должны быть в таблице, даже если ещё не играли.</param>
+    /// <param name="teamIds">
+    /// Команды, которые должны присутствовать в таблице,
+    /// даже если ещё не сыграли.
+    /// </param>
     public static IReadOnlyList<StandingsEntry> Calculate(
         IReadOnlyCollection<StandingsMatch> matches,
         StandingsRules rules,
@@ -63,37 +78,59 @@ public static class StandingsCalculator
         var table = new Dictionary<Guid, Accumulator>();
 
         foreach (var teamId in teamIds)
+        {
             GetOrCreate(table, teamId);
+        }
 
         foreach (var match in matches)
         {
             var home = GetOrCreate(table, match.HomeTeamId);
             var away = GetOrCreate(table, match.AwayTeamId);
 
-            home.AddResult(match.HomeScore, match.AwayScore, PointsFor(match.HomeScore, match.AwayScore, rules));
-            away.AddResult(match.AwayScore, match.HomeScore, PointsFor(match.AwayScore, match.HomeScore, rules));
+            home.AddResult(
+                match.HomeScore,
+                match.AwayScore,
+                PointsFor(match.HomeScore, match.AwayScore, rules));
+
+            away.AddResult(
+                match.AwayScore,
+                match.HomeScore,
+                PointsFor(match.AwayScore, match.HomeScore, rules));
         }
 
-        var entries = table.Values.Select(accumulator => accumulator.ToEntry()).ToList();
+        var entries = table.Values
+            .Select(accumulator => accumulator.ToEntry())
+            .ToList();
+
         entries.Sort(new StandingsComparer(rules, matches));
 
         return entries;
     }
 
-    private static int PointsFor(int scored, int conceded, StandingsRules rules) =>
-        scored > conceded
-            ? rules.WinPoints
-            : scored == conceded
-                ? rules.DrawPoints
-                : rules.LossPoints;
+    private static int PointsFor(
+        int scored,
+        int conceded,
+        StandingsRules rules)
+    {
+        if (scored > conceded)
+            return rules.WinPoints;
 
-    private static Accumulator GetOrCreate(Dictionary<Guid, Accumulator> table, Guid teamId)
+        if (scored == conceded)
+            return rules.DrawPoints;
+
+        return rules.LossPoints;
+    }
+
+    private static Accumulator GetOrCreate(
+        Dictionary<Guid, Accumulator> table,
+        Guid teamId)
     {
         if (table.TryGetValue(teamId, out var accumulator))
             return accumulator;
 
         accumulator = new Accumulator(teamId);
         table[teamId] = accumulator;
+
         return accumulator;
     }
 
@@ -114,9 +151,12 @@ public static class StandingsCalculator
             _goalsAgainst += conceded;
             _points += points;
 
-            if (scored > conceded) _wins++;
-            else if (scored == conceded) _draws++;
-            else _losses++;
+            if (scored > conceded)
+                _wins++;
+            else if (scored == conceded)
+                _draws++;
+            else
+                _losses++;
         }
 
         public StandingsEntry ToEntry() => new(
@@ -132,38 +172,73 @@ public static class StandingsCalculator
     }
 
     /// <summary>
-    /// Порядок: очки, затем тай-брейки этапа в заданном приоритете, затем стабильный
-    /// детерминированный ключ (Id команды), чтобы таблица не «прыгала» между запросами.
+    /// Сортировка:
+    /// 1. Очки.
+    /// 2. Разница мячей.
+    /// 3. Личные встречи.
+    /// 4. Забитые мячи.
+    /// 5. ID команды для детерминированного порядка.
     /// </summary>
     private sealed class StandingsComparer(
         StandingsRules rules,
-        IReadOnlyCollection<StandingsMatch> matches) : IComparer<StandingsEntry>
+        IReadOnlyCollection<StandingsMatch> matches)
+        : IComparer<StandingsEntry>
     {
-        public int Compare(StandingsEntry? left, StandingsEntry? right)
+        private static readonly StandingsTiebreaker[] DefaultTiebreakers =
+        [
+            StandingsTiebreaker.GoalDifference,
+            StandingsTiebreaker.HeadToHead,
+            StandingsTiebreaker.GoalsScored
+        ];
+
+        public int Compare(
+            StandingsEntry? left,
+            StandingsEntry? right)
         {
-            if (left is null || right is null) return 0;
+            if (ReferenceEquals(left, right))
+                return 0;
+
+            if (left is null)
+                return 1;
+
+            if (right is null)
+                return -1;
 
             var byPoints = right.Points.CompareTo(left.Points);
-            if (byPoints != 0) return byPoints;
 
-            foreach (var tiebreaker in rules.Tiebreakers)
+            if (byPoints != 0)
+                return byPoints;
+
+            foreach (var tiebreaker in DefaultTiebreakers)
             {
                 var result = tiebreaker switch
                 {
-                    StandingsTiebreaker.GoalDifference => right.GoalDifference.CompareTo(left.GoalDifference),
-                    StandingsTiebreaker.GoalsScored => right.GoalsFor.CompareTo(left.GoalsFor),
-                    StandingsTiebreaker.HeadToHead => CompareHeadToHead(left.TeamId, right.TeamId),
+                    StandingsTiebreaker.GoalDifference =>
+                        right.GoalDifference.CompareTo(left.GoalDifference),
+
+                    StandingsTiebreaker.GoalsScored =>
+                        right.GoalsFor.CompareTo(left.GoalsFor),
+
+                    StandingsTiebreaker.HeadToHead =>
+                        CompareHeadToHead(left.TeamId, right.TeamId),
+
                     _ => 0
                 };
 
-                if (result != 0) return result;
+                if (result != 0)
+                    return result;
             }
 
             return left.TeamId.CompareTo(right.TeamId);
         }
 
-        /// <summary>Личные встречи: сначала очки в них, затем разница мячей в них.</summary>
-        private int CompareHeadToHead(Guid leftTeamId, Guid rightTeamId)
+        /// <summary>
+        /// Личные встречи:
+        /// сначала очки, затем разница мячей.
+        /// </summary>
+        private int CompareHeadToHead(
+            Guid leftTeamId,
+            Guid rightTeamId)
         {
             var leftPoints = 0;
             var rightPoints = 0;
@@ -172,24 +247,44 @@ public static class StandingsCalculator
             foreach (var match in matches)
             {
                 var isDirect =
-                    (match.HomeTeamId == leftTeamId && match.AwayTeamId == rightTeamId) ||
-                    (match.HomeTeamId == rightTeamId && match.AwayTeamId == leftTeamId);
+                    (match.HomeTeamId == leftTeamId &&
+                     match.AwayTeamId == rightTeamId) ||
 
-                if (!isDirect) continue;
+                    (match.HomeTeamId == rightTeamId &&
+                     match.AwayTeamId == leftTeamId);
 
-                var leftGoals = match.HomeTeamId == leftTeamId ? match.HomeScore : match.AwayScore;
-                var rightGoals = match.HomeTeamId == rightTeamId ? match.HomeScore : match.AwayScore;
+                if (!isDirect)
+                    continue;
+
+                var leftGoals = match.HomeTeamId == leftTeamId
+                    ? match.HomeScore
+                    : match.AwayScore;
+
+                var rightGoals = match.HomeTeamId == rightTeamId
+                    ? match.HomeScore
+                    : match.AwayScore;
 
                 leftDifference += leftGoals - rightGoals;
-                leftPoints += PointsFor(leftGoals, rightGoals, rules);
-                rightPoints += PointsFor(rightGoals, leftGoals, rules);
+
+                leftPoints += PointsFor(
+                    leftGoals,
+                    rightGoals,
+                    rules);
+
+                rightPoints += PointsFor(
+                    rightGoals,
+                    leftGoals,
+                    rules);
             }
 
-            var byHeadToHeadPoints = rightPoints.CompareTo(leftPoints);
-            if (byHeadToHeadPoints != 0) return byHeadToHeadPoints;
+            var byHeadToHeadPoints =
+                rightPoints.CompareTo(leftPoints);
 
-            // Разница мячей в личных встречах: у правой команды она противоположна левой.
+            if (byHeadToHeadPoints != 0)
+                return byHeadToHeadPoints;
+
             var rightDifference = -leftDifference;
+
             return rightDifference.CompareTo(leftDifference);
         }
     }

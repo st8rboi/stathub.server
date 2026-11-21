@@ -95,6 +95,7 @@ public sealed class DisciplineServingTests(StathubApiFactory factory)
         // Матчи фабрики стоят в расписании на 2026-05-10 — заведомо раньше выдачи.
         var matchId = await organizer.CreateMatchAsync(stageId, homeTeamId, awayTeamId);
         var playerId = await organizer.CreatePlayerAsync();
+        await organizer.RegisterPlayerAsync(homeTeamId, playerId);
 
         return new Scenario(organizer, tournamentId, stageId, homeTeamId, awayTeamId, matchId, playerId);
     }

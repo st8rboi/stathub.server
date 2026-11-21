@@ -157,6 +157,75 @@ public sealed class MatchEventsTests
     }
 
     [Fact]
+    public void Finish_FromPause_IsAllowed()
+    {
+        var match = CreateMatch();
+        var kickOff = DateTime.UtcNow.AddMinutes(-100);
+        match.Start(kickOff);
+        match.Stop(kickOff.AddMinutes(90));
+
+        match.Finish(kickOff.AddMinutes(91));
+
+        Assert.Equal(MatchStatus.Finished, match.Status);
+    }
+
+    [Fact]
+    public void Finish_BeforeKickOffTime_Throws()
+    {
+        var match = CreateMatch();
+        var kickOff = DateTime.UtcNow.AddMinutes(-100);
+        match.Start(kickOff);
+
+        Assert.Throws<DomainException>(() => match.Finish(kickOff.AddMinutes(-30)));
+    }
+
+    [Fact]
+    public void Cancel_ClosesProtocol_AndCannotBeRepeated()
+    {
+        var match = CreateMatch();
+        match.Start(DateTime.UtcNow.AddMinutes(-10));
+
+        match.Cancel();
+
+        Assert.Equal(MatchStatus.Cancelled, match.Status);
+        Assert.Throws<DomainException>(() => match.EnsureCanAccept(Goal(match, HomeTeamId, 2), organizerCorrection: true));
+        Assert.Throws<ConflictException>(match.Cancel);
+    }
+
+    [Fact]
+    public void Create_ShotWithExpectedGoalsRoundingToZero_Throws()
+    {
+        Assert.Throws<DomainException>(() => MatchEvent.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            MatchEventType.Shot,
+            HomeTeamId,
+            playerId: null,
+            relatedPlayerId: null,
+            targetEventId: null,
+            reason: null,
+            DateTime.UtcNow,
+            sequenceNumber: 1,
+            expectedGoals: 0.004m));
+    }
+
+    [Fact]
+    public void Create_OwnGoalWithAssist_Throws()
+    {
+        Assert.Throws<DomainException>(() => MatchEvent.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            MatchEventType.OwnGoal,
+            HomeTeamId,
+            playerId: Guid.NewGuid(),
+            relatedPlayerId: Guid.NewGuid(),
+            targetEventId: null,
+            reason: null,
+            DateTime.UtcNow,
+            sequenceNumber: 1));
+    }
+
+    [Fact]
     public void Lifecycle_TimesComeFromEvents_NotFromServerArrival()
     {
         var match = CreateMatch();

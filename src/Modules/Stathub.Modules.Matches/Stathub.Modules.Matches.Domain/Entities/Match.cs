@@ -273,15 +273,34 @@ public sealed class Match : AggregateRoot
     /// <summary>
     /// Завершение матча. Судья завершает матч сам, поэтому неполнота периодов не блокирует
     /// завершение — правила матча намеренно минимальны (см. AGENTS.md, «Особенности домена»).
+    /// Завершить можно и из паузы: судья часто сначала останавливает часы, потом свистит.
     /// </summary>
     public void Finish(DateTime occurredAtUtc)
     {
-        if (Status != MatchStatus.InProgress)
+        if (Status is not (MatchStatus.InProgress or MatchStatus.Pause))
             throw new DomainException(
-                "Матч можно закончить только из состояния в процессе.");
+                "Матч можно закончить только начатым — в игре или на паузе.");
+
+        if (StartedAtUtc is { } startedAtUtc && occurredAtUtc < startedAtUtc)
+            throw new DomainException("Финальный свисток не может быть раньше стартового.");
 
         Status = MatchStatus.Finished;
         FinishedAtUtc = occurredAtUtc;
+    }
+
+    /// <summary>
+    /// Отмена матча организатором: начат по ошибке (не тот матч) или не состоялся.
+    /// Протокол сохраняется как есть, но отменённый матч выпадает из live, таблицы, статистики
+    /// и отбытия дисквалификаций, а новые события в него не принимаются — в том числе
+    /// запоздавшие из офлайн-очереди судьи. Настоящий матч создаётся заново.
+    /// </summary>
+    public void Cancel()
+    {
+        if (Status == MatchStatus.Cancelled)
+            throw new ConflictException("Матч уже отменён.");
+
+        Status = MatchStatus.Cancelled;
+        PausedAtUtc = null;
     }
 
     /// <summary>
@@ -291,7 +310,10 @@ public sealed class Match : AggregateRoot
     /// </summary>
     public void EnsureEventsCanBeChanged()
     {
-        if (Status is MatchStatus.Finished or MatchStatus.Cancelled)
+        if (Status == MatchStatus.Cancelled)
+            throw new DomainException("Матч отменён: протокол закрыт.");
+
+        if (Status == MatchStatus.Finished)
             throw new DomainException(
                 "Матч завершён: протокол можно менять только до финального свистка.");
     }

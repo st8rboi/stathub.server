@@ -29,8 +29,11 @@ internal sealed class TournamentPlayerEventReader(MatchesDbContext dbContext) : 
     {
         var events = await dbContext.MatchEvents
             .AsNoTracking()
+            // Отменённый матч (начат по ошибке, не состоялся) в статистику игроков не идёт.
             .Where(matchEvent => dbContext.Matches
-                .Any(match => match.Id == matchEvent.MatchId && match.DivisionId == divisionId))
+                .Any(match => match.Id == matchEvent.MatchId
+                              && match.DivisionId == divisionId
+                              && match.Status != MatchStatus.Cancelled))
             .Select(matchEvent => new
             {
                 matchEvent.Id,

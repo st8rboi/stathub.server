@@ -184,10 +184,13 @@ public sealed class MatchEvent : Entity
 
         if (expectedGoals is not { } value)
             throw new DomainException("У удара должна быть указана опасность (xG).");
-        if (value <= 0 || value > 1)
-            throw new DomainException("xG удара должен быть больше 0 и не больше 1.");
 
-        return Math.Round(value, 2, MidpointRounding.AwayFromZero);
+        // Округлённое значение тоже проверяем: 0.004 иначе прошло бы проверку и сохранилось нулём.
+        var rounded = Math.Round(value, 2, MidpointRounding.AwayFromZero);
+        if (value <= 0 || value > 1 || rounded <= 0)
+            throw new DomainException("xG удара должен быть от 0.01 до 1.");
+
+        return rounded;
     }
 
     /// <summary>
@@ -245,11 +248,18 @@ public sealed class MatchEvent : Entity
         switch (type)
         {
             case MatchEventType.Goal:
-            case MatchEventType.OwnGoal:
                 if (teamId is null)
                     throw new DomainException("Гол должен быть привязан к команде.");
                 if (playerId is not null && playerId == relatedPlayerId)
                     throw new DomainException("Ассистент не может совпадать с автором гола.");
+                break;
+
+            case MatchEventType.OwnGoal:
+                if (teamId is null)
+                    throw new DomainException("Гол должен быть привязан к команде.");
+                // Автогол засчитывается сопернику, а ассистент был бы игроком своей же команды.
+                if (relatedPlayerId is not null)
+                    throw new DomainException("У автогола не бывает ассистента.");
                 break;
 
             case MatchEventType.PenaltyMissed:

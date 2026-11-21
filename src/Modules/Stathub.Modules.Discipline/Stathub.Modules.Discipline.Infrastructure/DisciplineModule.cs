@@ -53,15 +53,16 @@ internal sealed class DisqualificationRepository(DisciplineDbContext dbContext) 
 
     public Task<Disqualification?> FindActiveAsync(
         Guid tournamentId,
-        Guid teamId,
         Guid playerId,
         CancellationToken cancellationToken = default) =>
-        dbContext.Disqualifications.FirstOrDefaultAsync(
-            item => item.TournamentId == tournamentId
-                    && item.TeamId == teamId
-                    && item.PlayerId == playerId
-                    && item.LiftedAtUtc == null,
-            cancellationToken);
+        // Последняя выданная: раньше бан был привязан к команде, и у игрока после трансфера
+        // могли остаться две неснятые записи разных команд.
+        dbContext.Disqualifications
+            .Where(item => item.TournamentId == tournamentId
+                           && item.PlayerId == playerId
+                           && item.LiftedAtUtc == null)
+            .OrderByDescending(item => item.IssuedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
 
     public async Task AddAsync(Disqualification disqualification, CancellationToken cancellationToken = default) =>
         await dbContext.Disqualifications.AddAsync(disqualification, cancellationToken);
@@ -77,12 +78,13 @@ internal sealed class DisqualificationRepository(DisciplineDbContext dbContext) 
 /// </summary>
 internal sealed class TeamMatchesSource(MatchService matchService) : ITeamMatchesSource
 {
-    public Task<int> CountFinishedSinceAsync(
+    public Task<int> CountFinishedBetweenAsync(
         Guid tournamentId,
         Guid teamId,
-        DateTime sinceUtc,
+        DateTime afterUtc,
+        DateTime? beforeUtc,
         CancellationToken cancellationToken = default) =>
-        matchService.CountFinishedTeamMatchesAfterAsync(tournamentId, teamId, sinceUtc, cancellationToken);
+        matchService.CountFinishedTeamMatchesAsync(tournamentId, teamId, afterUtc, beforeUtc, cancellationToken);
 }
 
 internal sealed class DisciplineDirectory(

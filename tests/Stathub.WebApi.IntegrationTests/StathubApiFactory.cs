@@ -135,6 +135,7 @@ public static class HttpResponseExtensions
 public sealed class TestOrganizer(StathubApiFactory factory, HttpClient client)
 {
     private readonly Dictionary<Guid, Guid> _divisionByStage = [];
+    private readonly Dictionary<Guid, (Guid DivisionId, Guid EntryId)> _entryByTeam = [];
     private Guid _leagueId;
 
     public HttpClient Client { get; } = client;
@@ -195,9 +196,23 @@ public sealed class TestOrganizer(StathubApiFactory factory, HttpClient client)
             .ReadIdAsync();
 
     /// <summary>Заявляет команду в дивизион, которому принадлежит этап.</summary>
-    public async Task<Guid> RegisterTeamAsync(Guid stageId, Guid teamId) =>
-        await (await Client.PostAsJsonAsync($"/divisions/{GetDivisionId(stageId)}/teams", new { teamId }))
+    public async Task<Guid> RegisterTeamAsync(Guid stageId, Guid teamId)
+    {
+        var divisionId = GetDivisionId(stageId);
+        var entryId = await (await Client.PostAsJsonAsync($"/divisions/{divisionId}/teams", new { teamId }))
             .ReadIdAsync();
+
+        _entryByTeam[teamId] = (divisionId, entryId);
+        return entryId;
+    }
+
+    /// <summary>Заявляет игрока за команду, ранее заявленную через <see cref="RegisterTeamAsync"/>.</summary>
+    public async Task RegisterPlayerAsync(Guid teamId, Guid playerId)
+    {
+        var (divisionId, entryId) = _entryByTeam[teamId];
+        var response = await Client.PostAsJsonAsync($"/divisions/{divisionId}/teams/{entryId}/players", new { playerId });
+        response.EnsureSuccessStatusCode();
+    }
 
     public async Task<Guid> CreatePlayerAsync() =>
         await (await Client.PostAsJsonAsync("/players", new { fullName = "Ivanov Ivan" })).ReadIdAsync();

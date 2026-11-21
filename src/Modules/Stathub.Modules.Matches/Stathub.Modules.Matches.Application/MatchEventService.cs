@@ -66,10 +66,18 @@ public sealed class MatchEventService(
         if (incoming.Count == 0)
             throw new DomainException("Список событий пуст.");
 
+        // Батчи одного матча применяются по очереди: матч и протокол читаются уже под блокировкой.
+        await using var writeScope = await eventRepository.BeginMatchWriteAsync(matchId, cancellationToken);
+
         var match = await GetMatchOrThrowAsync(matchId, cancellationToken);
 
         var existing = await eventRepository.GetByMatchIdAsync(matchId, cancellationToken);
         var eventsById = existing.ToDictionary(matchEvent => matchEvent.Id);
+
+        // Id, занятые событиями других матчей: такое событие отклоняется само, а не роняет батч.
+        var takenElsewhere = await eventRepository.FindExistingIdsAsync(
+            incoming.Select(item => item.Id).Where(id => !eventsById.ContainsKey(id)).Distinct().ToList(),
+            cancellationToken);
 
         var nowUtc = DateTime.UtcNow;
         var clockOffset = clientSentAtUtc is { } sentAtUtc ? nowUtc - sentAtUtc : TimeSpan.Zero;
@@ -85,6 +93,12 @@ public sealed class MatchEventService(
             if (eventsById.ContainsKey(item.Id))
             {
                 duplicateIds.Add(item.Id);
+                continue;
+            }
+
+            if (takenElsewhere.Contains(item.Id))
+            {
+                rejected.Add(new RejectedEventDto(item.Id, "Событие с таким Id уже есть в протоколе другого матча."));
                 continue;
             }
 
@@ -136,6 +150,8 @@ public sealed class MatchEventService(
             await eventRepository.SaveChangesAsync(cancellationToken);
         }
 
+        await writeScope.CommitAsync(cancellationToken);
+
         return new AppendEventsResultDto(
             accepted.Select(matchEvent => matchEvent.Id).ToList(),
             duplicateIds,
@@ -151,9 +167,10 @@ public sealed class MatchEventService(
     }
 
     /// <summary>
-    /// Дисквалифицированный игрок на поле — факт, который судья не может отменить, а список
-    /// дисквалификаций у него мог устареть без связи. Событие принимается с пометкой,
-    /// разбирается организатор. Проверка — по БД на каждый батч, снятие действует сразу.
+    /// Дисквалифицированный или не заявленный за команду игрок на поле — факт, который судья
+    /// не может отменить, а список дисквалификаций и состав у него могли устареть без связи.
+    /// Событие принимается с пометкой, разбирается организатор. Проверка — по БД на каждый
+    /// батч, снятие дисквалификации и дозаявка действуют сразу.
     /// </summary>
     private async Task MarkIneligiblePlayersAsync(
         Match match,
@@ -163,26 +180,27 @@ public sealed class MatchEventService(
         if (matchEvent.TeamId is not { } teamId)
             return;
 
+        var onDate = DateOnly.FromDateTime(matchEvent.EffectiveTimeUtc);
+        var notes = new List<string>();
+
         foreach (var playerId in new[] { matchEvent.PlayerId, matchEvent.RelatedPlayerId })
         {
             if (playerId is not { } id)
                 continue;
 
-            var left = await playerEligibility.GetBanLeftAsync(
-                match.TournamentId,
-                teamId,
-                id,
-                cancellationToken);
+            var left = await playerEligibility.GetBanLeftAsync(match.TournamentId, id, cancellationToken);
 
-            if (left is null)
-                continue;
+            if (left is not null)
+                notes.Add(left == int.MaxValue
+                    ? "Участвовал игрок с бессрочной дисквалификацией."
+                    : $"Участвовал дисквалифицированный игрок: осталось матчей — {left}.");
 
-            matchEvent.MarkForReview(left == int.MaxValue
-                ? "Участвовал игрок с бессрочной дисквалификацией."
-                : $"Участвовал дисквалифицированный игрок: осталось матчей — {left}.");
-
-            return;
+            if (!await playerEligibility.IsRegisteredAsync(match.TournamentId, teamId, id, onDate, cancellationToken))
+                notes.Add("Игрок не заявлен за команду на дату матча.");
         }
+
+        if (notes.Count > 0)
+            matchEvent.MarkForReview(string.Join(" ", notes.Distinct()));
     }
 
     /// <summary>
@@ -221,6 +239,9 @@ public sealed class MatchEventService(
 
         if (target.IsLifecycle)
             throw new DomainException("Смену статуса матча отменить нельзя.");
+
+        if (eventsById.Values.Any(other => other.Type == MatchEventType.EventVoided && other.TargetEventId == target.Id))
+            throw new DomainException("Событие уже отменено.");
     }
 
     private static MatchStateDto BuildState(Match match, IReadOnlyCollection<MatchEvent> events)

@@ -33,13 +33,15 @@ public interface IMatchRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Сколько матчей команды в турнире завершено строго после момента <paramref name="afterUtc"/>
-    /// (по финальному свистку; у матчей без отметки свистка — по времени начала из расписания).
+    /// Сколько матчей команды в турнире завершено строго после <paramref name="afterUtc"/> и
+    /// раньше <paramref name="beforeUtc"/>, если граница задана (по финальному свистку;
+    /// у матчей без отметки свистка — по времени начала из расписания).
     /// </summary>
-    Task<int> CountFinishedAfterAsync(
+    Task<int> CountFinishedAsync(
         Guid tournamentId,
         Guid teamId,
         DateTime afterUtc,
+        DateTime? beforeUtc,
         CancellationToken cancellationToken = default);
 
     /// <summary>Этап и время начала всех матчей — без загрузки самих матчей (полоса дат витрины).</summary>

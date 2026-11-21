@@ -179,6 +179,7 @@ public sealed class AccessControlTests(StathubApiFactory factory)
     {
         var scenario = await CreateScenarioAsync();
         var playerId = await scenario.Organizer.CreatePlayerAsync();
+        await scenario.Organizer.RegisterPlayerAsync(scenario.HomeTeamId, playerId);
 
         var disqualificationId = await (await scenario.Organizer.Client.PostAsJsonAsync(
             $"/discipline/tournaments/{scenario.TournamentId}",

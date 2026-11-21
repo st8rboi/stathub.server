@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Stathub.Infrastructure.Storage;
+using Stathub.Modules.Discipline.Application;
 using Stathub.Modules.Discipline.Infrastructure;
 using Stathub.Modules.Discipline.Infrastructure.Persistence;
 using Stathub.Modules.Matches.Application.Interfaces;
@@ -40,7 +41,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddControllers()
-    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        // Время без зоны («2026-11-21T12:00:00») считаем UTC: иначе Npgsql отказывается писать
+        // DateTime с Kind=Unspecified в timestamptz, и запрос падает с 500.
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+    });
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -71,6 +78,7 @@ builder.Services.AddIdentityModule(builder.Configuration);
 builder.Services.AddFinanceModule(builder.Configuration);
 builder.Services.AddDisciplineModule(builder.Configuration);
 builder.Services.AddScoped<IPlayerEligibility, PlayerEligibilityAdapter>();
+builder.Services.AddScoped<IPlayerRosterHistory, PlayerRosterHistoryAdapter>();
 
 // Identity: текущий пользователь из claims + JWT-аутентификация.
 // Публичной регистрации нет — аккаунты выдаются административно (см. IdentityOps).
